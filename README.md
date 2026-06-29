@@ -98,3 +98,9 @@ data.js               # precomputed dataset (window.LEADERBOARD_DATA)
 data.json             # same data as plain JSON (for non-browser consumers)
 scripts/build_data.py # regenerates data.js / data.json from run.json + profiles
 ```
+
+## License
+
+BSD-3-Clause — Copyright 2008-2025 Neongecko.com Inc. See [`LICENSE.md`](LICENSE.md).
+The leaderboard figures are derived from the proprietary `neon-router` benchmark
+pipeline; this repository covers the dashboard presentation code.

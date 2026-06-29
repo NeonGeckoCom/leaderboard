@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Neon Leaderboard</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --bg-elev: #161c24;
+    --bg-elev2: #1c242e;
+    --panel: #131a22;
+    --border: #283441;
+    --border-soft: #1f2a35;
+    --text: #d7dee7;
+    --text-dim: #93a1b0;
+    --text-faint: #64727f;
+    --accent: #3fb6a8;          /* neon teal */
+    --accent-dim: #2c7a72;
+    --neon: #5ad1c2;
+    --good-h: 168;              /* teal-green */
+    --bad-h: 28;                /* warm amber */
+    --chip-bg: #1d2731;
+    --shadow: 0 4px 18px rgba(0,0,0,.35);
+    --radius: 9px;
+    --row-h: 26px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  html[data-theme="light"] {
+    --bg: #f3f5f8;
+    --bg-elev: #ffffff;
+    --bg-elev2: #eef1f5;
+    --panel: #ffffff;
+    --border: #d4dbe3;
+    --border-soft: #e4e9ef;
+    --text: #1f2933;
+    --text-dim: #56636f;
+    --text-faint: #8a97a3;
+    --accent: #1f8f82;
+    --accent-dim: #5fb5ab;
+    --neon: #178a7c;
+    --chip-bg: #eef2f6;
+    --shadow: 0 4px 18px rgba(40,55,75,.12);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;            /* single viewport, no page scroll */
+  }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  select, input { font-family: inherit; font-size: 12.5px; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+  /* ---------- Header ---------- */
+  header.top {
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 16px; height: 50px; flex: 0 0 auto;
+    background: var(--bg-elev); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 9px var(--accent); align-self: center; }
+  .brand h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: .2px; }
+  .brand .meta { color: var(--text-faint); font-size: 11px; }
+
+  nav.tabs { display: flex; gap: 2px; margin-left: 4px; }
+  nav.tabs button {
+    background: transparent; border: 0; padding: 8px 14px; border-radius: 7px;
+    color: var(--text-dim); font-size: 13px; font-weight: 550; letter-spacing: .2px;
+    transition: background .12s, color .12s;
+  }
+  nav.tabs button:hover { background: var(--bg-elev2); color: var(--text); }
+  nav.tabs button.active { background: var(--accent); color: #06231f; }
+  html[data-theme="light"] nav.tabs button.active { color: #fff; }
+
+  .spacer { flex: 1 1 auto; }
+  .icon-btn {
+    background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 7px;
+    width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-dim);
+    font-size: 15px;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent-dim); }
+
+  /* ---------- Controls bar ---------- */
+  .controls {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 9px 16px; flex: 0 0 auto;
+    background: var(--panel); border-bottom: 1px solid var(--border-soft);
+    min-height: 46px;
+  }
+  .ctl { display: flex; align-items: center; gap: 7px; }
+  .ctl label { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .field {
+    background: var(--bg-elev2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 6px 9px; min-width: 90px; outline: none;
+  }
+  .field:focus { border-color: var(--accent-dim); }
+  select.field { padding-right: 26px; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+                      linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+    background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .seg { display: inline-flex; background: var(--bg-elev2); border: 1px solid var(--border);
+    border-radius: 7px; overflow: hidden; }
+  .seg button { background: transparent; border: 0; padding: 6px 11px; color: var(--text-dim); font-size: 12px; }
+  .seg button.active { background: var(--accent); color: #06231f; }
+  html[data-theme="light"] .seg button.active { color: #fff; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 12px; user-select: none; }
+  .toggle input { accent-color: var(--accent); }
+
+  /* combobox (searchable dropdown) */
+  .combo { position: relative; }
+  .combo .menu {
+    position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 240px; max-width: 360px;
+    max-height: 320px; overflow: auto; background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: var(--shadow); padding: 5px; display: none;
+  }
+  .combo.open .menu { display: block; }
+  .combo .opt { padding: 6px 9px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .combo .opt:hover, .combo .opt.kbd { background: var(--bg-elev2); }
+  .combo .opt.sel { color: var(--accent); }
+  .combo .opt small { color: var(--text-faint); margin-left: auto; }
+
+  /* ---------- Main ---------- */
+  main { flex: 1 1 auto; min-height: 0; display: flex; position: relative; }
+  .view { display: none; flex: 1; min-height: 0; flex-direction: column; padding: 12px 16px 8px; }
+  .view.active { display: flex; }
+
+  .table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--border-soft);
+    border-radius: var(--radius); background: var(--panel); }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; }
+  thead th {
+    position: sticky; top: 0; z-index: 5; background: var(--bg-elev);
+    text-align: right; padding: 7px 9px; font-size: 11px; font-weight: 600; color: var(--text-dim);
+    border-bottom: 1px solid var(--border); white-space: nowrap; cursor: help; user-select: none;
+  }
+  thead th.lbl, thead th.sortable { cursor: pointer; }
+  thead th.txt { text-align: left; }
+  thead th .arrow { color: var(--accent); font-size: 9px; margin-left: 3px; }
+  tbody td { padding: 4px 9px; text-align: right; font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--border-soft); white-space: nowrap; height: var(--row-h); }
+  tbody td.txt { text-align: left; font-family: var(--mono); font-size: 12px; }
+  tbody tr:hover td { background: rgba(127,150,170,.07); }
+  tbody tr.neon td.txt .pipe { font-weight: 600; }
+
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 650;
+    letter-spacing: .3px; vertical-align: middle; }
+  .badge.neon { background: rgba(90,209,194,.16); color: var(--neon); border: 1px solid rgba(90,209,194,.3); }
+  .badge.pareto { background: rgba(120,170,255,.14); color: #8fb6ff; }
+  .badge.dq { background: rgba(255,120,90,.13); color: #ff9b7d; border: 1px solid rgba(255,120,90,.25); }
+  html[data-theme="light"] .badge.pareto { color: #2f5fc0; }
+  .star { color: #8fb6ff; font-size: 11px; }
+  .pipe small { color: var(--text-faint); }
+
+  .verdict { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .v-clear { background: rgba(63,182,168,.18); color: var(--neon); }
+  .v-inconclusive { background: rgba(190,170,90,.16); color: #d9c178; }
+  .v-dq { background: rgba(255,120,90,.13); color: #ff9b7d; }
+  .v-none { background: var(--chip-bg); color: var(--text-faint); }
+
+  /* Picks grid + Metrics grid share matrix styles */
+  .matrix-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--border-soft);
+    border-radius: var(--radius); background: var(--panel); }
+  .matrix { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .matrix th, .matrix td { padding: 8px 10px; border-bottom: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); }
+  .matrix thead th { position: sticky; top: 0; background: var(--bg-elev); z-index: 5; cursor: help; font-size: 11.5px; }
+  .matrix tbody th { position: sticky; left: 0; background: var(--bg-elev); z-index: 4; text-align: left; cursor: help; }
+  .matrix td { text-align: center; font-variant-numeric: tabular-nums; }
+  .matrix .cell-sub { display: block; font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+
+  /* Models tab */
+  .model-page { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 280px 1fr; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 16px; }
+  .card.scroll { overflow: auto; }
+  .kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
+  .kv:last-child { border-bottom: 0; }
+  .kv .k { color: var(--text-faint); }
+  .kv .v { color: var(--text); text-align: right; font-family: var(--mono); }
+  .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat { background: var(--bg-elev2); border: 1px solid var(--border-soft); border-radius: 8px; padding: 9px 13px; min-width: 92px; }
+  .stat .n { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; cursor: help; }
+
+  /* Guide tab */
+  .guide-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .guide-col { overflow: auto; }
+  .guide-col h3 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
+  .gloss { width: 100%; border-collapse: collapse; }
+  .gloss td { padding: 5px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; font-size: 12px; }
+  .gloss td.term { color: var(--text); font-weight: 600; white-space: nowrap; width: 78px; font-family: var(--mono); }
+  .gloss td.def { color: var(--text-dim); }
+  .prof { background: var(--bg-elev2); border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .prof h4 { margin: 0 0 4px; font-size: 12.5px; }
+  .prof .gates { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gate { background: var(--chip-bg); border-radius: 6px; padding: 2px 8px; font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+
+  footer.bottom { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 4px 16px;
+    height: 26px; background: var(--bg-elev); border-top: 1px solid var(--border); font-size: 10.5px; color: var(--text-faint); }
+  footer .lg { display: inline-flex; align-items: center; gap: 5px; }
+  footer .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  /* tooltip */
+  #tip { position: fixed; z-index: 200; max-width: 320px; background: #0a0e12; color: #e7edf3;
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 12px; line-height: 1.45;
+    box-shadow: var(--shadow); pointer-events: none; opacity: 0; transition: opacity .1s; }
+  html[data-theme="light"] #tip { background: #1f2933; color: #f3f5f8; border-color: #1f2933; }
+  #tip b { color: var(--neon); }
+
+  .empty { color: var(--text-faint); padding: 30px; text-align: center; font-size: 13px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="dot"></span><h1>Neon Leaderboard</h1><span class="meta" id="headerMeta"></span></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="compare" class="active">Compare</button>
+      <button data-tab="picks">Picks</button>
+      <button data-tab="models">Models</button>
+      <button data-tab="metrics">Metrics</button>
+      <button data-tab="guide">Guide</button>
+    </nav>
+    <span class="spacer"></span>
+    <button class="icon-btn" id="themeBtn" title="Toggle light / dark">◐</button>
+  </header>
+
+  <!-- COMPARE -->
+  <div class="controls" id="ctl-compare">
+    <div class="ctl"><label>View</label>
+      <div class="seg" id="cmpModeSeg">
+        <button data-mode="byBench" class="active">By benchmark</button>
+        <button data-mode="byModel">By model</button>
+      </div>
+    </div>
+    <div class="ctl" id="benchPickWrap"><label>Benchmark</label><div class="combo" id="benchCombo"></div></div>
+    <div class="ctl" id="modelPickWrap" style="display:none"><label>Model</label><div class="combo" id="modelCombo"></div></div>
+    <div class="ctl"><label>Filter model</label><div class="combo" id="filterCombo"></div></div>
+    <div class="ctl"><label>Sort</label><select class="field" id="sortSel"></select>
+      <button class="icon-btn" id="sortDir" title="Sort direction" style="width:30px;height:30px">▾</button>
+    </div>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="neonOnly" /> Neon only</label>
+    <label class="toggle"><input type="checkbox" id="showDQ" checked /> Show DQ</label>
+    <label class="toggle"><input type="checkbox" id="heat" checked /> Color</label>
+  </div>
+
+  <!-- PICKS -->
+  <div class="controls" id="ctl-picks" style="display:none">
+    <div class="ctl"><label>Router recommendations</label></div>
+    <span class="meta" style="color:var(--text-faint);font-size:11.5px">Pick = model · retriever · reranker per client profile. Hover a profile column for its hard gates.</span>
+  </div>
+
+  <!-- MODELS -->
+  <div class="controls" id="ctl-models" style="display:none">
+    <div class="ctl"><label>Model</label><div class="combo" id="modelPageCombo"></div></div>
+    <span class="meta" id="modelPageBadge"></span>
+  </div>
+
+  <!-- METRICS -->
+  <div class="controls" id="ctl-metrics" style="display:none">
+    <div class="ctl"><label>Show</label>
+      <div class="seg" id="metricModeSeg">
+        <button data-mode="scores" class="active">Mean scores</button>
+        <button data-mode="winloss">Wins / losses</button>
+      </div>
+    </div>
+    <div class="ctl"><label>Sort by</label><select class="field" id="metricSortSel"></select></div>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="metricNeonOnly" /> Neon only</label>
+    <label class="toggle"><input type="checkbox" id="metricHeat" checked /> Color</label>
+  </div>
+
+  <!-- GUIDE -->
+  <div class="controls" id="ctl-guide" style="display:none">
+    <div class="ctl"><label>Reference</label></div>
+    <span class="meta" style="color:var(--text-faint);font-size:11.5px">Every column, profile gate, and provenance source behind the numbers.</span>
+  </div>
+
+  <main>
+    <section class="view active" id="view-compare"><div class="table-wrap"><table id="cmpTable"></table></div></section>
+    <section class="view" id="view-picks"><div class="matrix-wrap"><table class="matrix" id="picksTable"></table></div></section>
+    <section class="view" id="view-models"><div class="model-page" id="modelPage"></div></section>
+    <section class="view" id="view-metrics"><div class="matrix-wrap"><table class="matrix" id="metricsTable"></table></div></section>
+    <section class="view" id="view-guide"><div class="guide-grid" id="guideGrid"></div></section>
+  </main>
+
+  <footer class="bottom">
+    <span class="lg"><span class="sw" id="lgGood"></span> higher rank</span>
+    <span class="lg"><span class="sw" id="lgBad"></span> lower rank</span>
+    <span class="lg"><span class="badge neon" style="padding:0 6px">NEON</span> Neon.ai model</span>
+    <span class="lg"><span class="star">★</span> Pareto-optimal</span>
+    <span class="lg"><span class="badge dq" style="padding:0 6px">DQ</span> disqualified by a profile gate</span>
+    <span class="spacer"></span>
+    <span id="provFoot"></span>
+  </footer>
+</div>
+<div id="tip"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -232,7 +232,7 @@
   const sortSel = $("#sortSel");
   function fillSortSel() {
     sortSel.innerHTML = "";
-    sortSel.appendChild(el("option", { value: "pipe", text: "Pipeline (A–Z)" }));
+    sortSel.appendChild(el("option", { value: "pipe", text: "Model (A–Z)" }));
     METRICS.forEach(m => sortSel.appendChild(el("option", { value: m.field, text: m.label })));
     sortSel.value = S.sortKey;
   }
@@ -256,10 +256,12 @@
   function activeMetricCols(rows) {
     return METRICS.filter(m => rows.some(r => r[m.field] != null && r[m.field] !== ""));
   }
+  function modelDisplay(c) { return c.is_retrieval_only ? "no model" : c.model; }
+
   function renderCompare() {
     const table = $("#cmpTable");
     table.innerHTML = "";
-    let rows, flagFor, leftHead, leftCell;
+    let rows, leftCols;
 
     if (S.cmpMode === "byBench") {
       const bt = D.bench_tables[S.bench] || { order: [], pareto: [], dq: {} };
@@ -268,22 +270,44 @@
       if (S.filterModel !== "__all__") rows = rows.filter(r => r.model === S.filterModel);
       if (S.neonOnly) rows = rows.filter(r => r.is_neon);
       if (!S.showDQ) rows = rows.filter(r => !bt.dq[r.candidate_id]);
-      flagFor = r => ({ pareto: paretoSet.has(r.candidate_id), dq: bt.dq[r.candidate_id] });
-      leftHead = "pipeline"; leftCell = r => pipeCell(r, flagFor(r));
+      const flagFor = r => ({ pareto: paretoSet.has(r.candidate_id), dq: bt.dq[r.candidate_id] });
+      leftCols = [
+        { key: "pipe", head: "model", thClass: "txt lbl sortable",
+          tip: glossTip("model", "\u201cno model\u201d = retrieval-only pipeline (no LLM generation step)."),
+          render: r => modelCell(r, flagFor(r)) },
+        { key: null, head: "retriever", thClass: "txt",
+          tip: glossTip("retriever", "Badges list the retrieval components actually used in this pipeline."),
+          render: r => retrieverCell(r) },
+        { key: "reranker", head: "rerank", thClass: "sortable",
+          tip: glossTip("rerank"),
+          render: r => rerankerCell(r) },
+      ];
     } else {
       rows = (aggByCand[S.cand] || []).slice();
-      flagFor = () => ({});
-      leftHead = "benchmark";
-      leftCell = r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>");
+      leftCols = [
+        { key: "pipe", head: "benchmark", thClass: "txt lbl sortable",
+          tip: "<b>benchmark</b><br>The evaluation dataset for this row.",
+          render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>") },
+      ];
     }
 
     const cols = activeMetricCols(rows);
-    // sort
+
+    // sort (string keys for the left columns, numeric for metrics)
+    const strKey = (r, k) => {
+      if (k === "pipe") {
+        if (S.cmpMode !== "byBench") return r.benchmark;
+        const c = CANDS[r.candidate_id];
+        return modelDisplay(c) + "|" + c.retriever + "|" + c.reranker;
+      }
+      if (k === "reranker") return r.reranker || "";
+      return null;
+    };
     rows.sort((a, b) => {
-      if (S.sortKey === "pipe") {
-        const av = S.cmpMode === "byBench" ? pipeLabel(CANDS[a.candidate_id]) : a.benchmark;
-        const bv = S.cmpMode === "byBench" ? pipeLabel(CANDS[b.candidate_id]) : b.benchmark;
-        return av < bv ? S.sortDir : av > bv ? -S.sortDir : 0;
+      const sa = strKey(a, S.sortKey);
+      if (sa !== null) {
+        const sb = strKey(b, S.sortKey);
+        return sa < sb ? S.sortDir : sa > sb ? -S.sortDir : 0;
       }
       const av = a[S.sortKey], bv = b[S.sortKey];
       if (av == null && bv == null) return 0;
@@ -301,8 +325,12 @@
     // head
     const thead = el("thead");
     const htr = el("tr");
-    htr.appendChild(bindTip(el("th", { class: "txt lbl sortable", onclick: () => sortByCol("pipe"), html: leftHead + (S.sortKey === "pipe" ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "") }),
-      S.cmpMode === "byBench" ? glossTip("pipeline", "model · retriever · reranker") : "<b>benchmark</b><br>The evaluation dataset for this row."));
+    leftCols.forEach(lc => {
+      const arrow = (lc.key && S.sortKey === lc.key) ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
+      const th = el("th", { class: lc.thClass, html: lc.head + arrow });
+      if (lc.key) th.addEventListener("click", () => sortByCol(lc.key));
+      htr.appendChild(bindTip(th, lc.tip));
+    });
     cols.forEach(m => {
       const arrow = S.sortKey === m.field ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
       htr.appendChild(bindTip(el("th", { class: "sortable", onclick: () => sortByCol(m.field), html: m.label + arrow }),
@@ -312,10 +340,10 @@
 
     // body
     const tb = el("tbody");
-    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: cols.length + 1, class: "empty", text: "No rows match the current filters." }))); }
+    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: leftCols.length + cols.length, class: "empty", text: "No rows match the current filters." }))); }
     rows.forEach(r => {
       const tr = el("tr", { class: r.is_neon ? "neon" : "" });
-      tr.appendChild(leftCell(r));
+      leftCols.forEach(lc => tr.appendChild(lc.render(r)));
       cols.forEach(m => {
         const v = r[m.field];
         const td = el("td", { text: num(v, m.fmt) });
@@ -326,22 +354,50 @@
     });
     table.appendChild(tb);
   }
-  function sortByCol(k) { if (S.sortKey === k) S.sortDir *= -1; else { S.sortKey = k; S.sortDir = (k === "pipe") ? 1 : -1; } sortSel.value = k; $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴"; render(); }
+  function sortByCol(k) {
+    if (S.sortKey === k) S.sortDir *= -1;
+    else { S.sortKey = k; S.sortDir = (k === "pipe" || k === "reranker") ? 1 : -1; }
+    if ([...sortSel.options].some(o => o.value === k)) sortSel.value = k;
+    $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
+    render();
+  }
 
-  function pipeCell(r, flag) {
+  function modelCell(r, flag) {
     const c = CANDS[r.candidate_id];
-    const inner = el("span", { class: "pipe" });
-    if (flag.pareto) inner.appendChild(el("span", { class: "star", text: "★ " }));
-    inner.appendChild(el("b", { text: c.model }));
-    inner.appendChild(el("small", { text: "  " + c.retriever + (c.reranker !== "none" ? " · " + c.reranker : "") }));
     const td = el("td", { class: "txt" });
-    if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:6px" }));
-    td.appendChild(inner);
+    td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelDisplay(c) })));
+    if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-left:7px" }));
+    if (flag.pareto) td.appendChild(el("span", { class: "star", text: "★", style: "margin-left:6px" }));
     if (flag.dq) td.appendChild(el("span", { class: "badge dq", text: "DQ:" + flag.dq, style: "margin-left:7px" }));
-    return bindTip(td, "<b>" + pipeLabel(c) + "</b>" +
-      (c.model_repo ? "<br>repo: " + c.model_repo : "") +
-      (flag.dq ? "<br><br>Disqualified by a profile's <b>" + flag.dq + "</b> gate." : "") +
-      (flag.pareto ? "<br><br>★ On the Pareto front (not dominated on accuracy / latency / build-cost)." : ""));
+    const head = c.is_retrieval_only
+      ? "<b>no model</b><br>Retrieval-only pipeline \u2014 the \u201cretrieval-only\u201d candidate runs no LLM generation step."
+      : "<b>" + c.model + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : "");
+    return bindTip(td, head +
+      (flag.pareto ? "<br><br>\u2605 On the Pareto front (not dominated on accuracy / latency / build-cost)." : "") +
+      (flag.dq ? "<br><br>Disqualified by a profile's <b>" + flag.dq + "</b> gate." : ""));
+  }
+
+  function retrieverCell(r) {
+    const meta = (D.retrievers || {})[r.retriever];
+    const td = el("td", { class: "txt" });
+    if (!meta || !meta.components.length) {
+      td.appendChild(el("span", { class: "pipe", text: r.retriever }));
+    } else {
+      meta.components.forEach(cp => {
+        const b = el("span", { class: "rbadge " + cp.key, text: cp.label });
+        if (cp.detail) b.appendChild(el("small", { text: cp.detail }));
+        td.appendChild(b);
+      });
+    }
+    return bindTip(td, "<b>" + r.retriever + "</b>" + (meta ? "<br>" + meta.summary : ""));
+  }
+
+  function rerankerCell(r) {
+    const c = CANDS[r.candidate_id];
+    const td = el("td", { class: "rerank-col", text: r.reranker });
+    const model = c.reranker_model;
+    return bindTip(td, "<b>" + r.reranker + "</b>" +
+      (model ? "<br>" + model : (r.reranker === "none" ? "<br>No reranking applied." : "")));
   }
 
   // ===================================================================

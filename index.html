@@ -177,12 +177,28 @@
 
   .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 650;
     letter-spacing: .3px; vertical-align: middle; }
-  .badge.neon { background: rgba(90,209,194,.16); color: var(--neon); border: 1px solid rgba(90,209,194,.3); }
+  /* NEON marker: plain text, no pill / background (per design request). */
+  .badge.neon { background: none; border: 0; padding: 0; color: var(--neon); font-size: 10px; font-weight: 700; letter-spacing: .5px; }
   .badge.pareto { background: rgba(120,170,255,.14); color: #8fb6ff; }
   .badge.dq { background: rgba(255,120,90,.13); color: #ff9b7d; border: 1px solid rgba(255,120,90,.25); }
   html[data-theme="light"] .badge.pareto { color: #2f5fc0; }
-  .star { color: #8fb6ff; font-size: 11px; }
+  .star { color: #d6b24a; font-size: 12px; }
+  html[data-theme="light"] .star { color: #b8860b; }
   .pipe small { color: var(--text-faint); }
+
+  /* Retriever component badges */
+  .rbadge { display: inline-block; padding: 1px 6px; margin: 1px 4px 1px 0; border-radius: 5px;
+    font-size: 10px; font-weight: 600; letter-spacing: .2px; border: 1px solid transparent; white-space: nowrap; }
+  .rbadge small { opacity: .7; font-weight: 500; margin-left: 3px; }
+  .rbadge.bm25   { background: rgba(120,160,255,.14); color: #9ab8ff; border-color: rgba(120,160,255,.30); }
+  .rbadge.emb    { background: rgba(63,182,168,.15);  color: var(--neon);  border-color: rgba(63,182,168,.32); }
+  .rbadge.splade { background: rgba(190,140,255,.14); color: #c6a3ff; border-color: rgba(190,140,255,.30); }
+  .rbadge.web    { background: rgba(230,170,90,.15);  color: #e6b06a; border-color: rgba(230,170,90,.32); }
+  html[data-theme="light"] .rbadge.bm25   { color: #2f5fc0; }
+  html[data-theme="light"] .rbadge.emb    { color: #1f8f82; }
+  html[data-theme="light"] .rbadge.splade { color: #7a3fc0; }
+  html[data-theme="light"] .rbadge.web    { color: #9a6a1a; }
+  td.rerank-col { text-align: right; color: var(--text-dim); font-size: 12px; }
 
   .verdict { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
   .v-clear { background: rgba(63,182,168,.18); color: var(--neon); }
@@ -322,7 +338,7 @@
   <footer class="bottom">
     <span class="lg"><span class="sw" id="lgGood"></span> higher rank</span>
     <span class="lg"><span class="sw" id="lgBad"></span> lower rank</span>
-    <span class="lg"><span class="badge neon" style="padding:0 6px">NEON</span> Neon.ai model</span>
+    <span class="lg"><span class="badge neon">NEON</span> Neon.ai model</span>
     <span class="lg"><span class="star">★</span> Pareto-optimal</span>
     <span class="lg"><span class="badge dq" style="padding:0 6px">DQ</span> disqualified by a profile gate</span>
     <span class="spacer"></span>

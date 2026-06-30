@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-29T23:53:17.900340+00:00",
+  "generated_at": "2026-06-30T00:14:57.108981+00:00",
   "date": "2026-06-29",
   "benchmarks": [
     "dataset-neonai-qa",
@@ -370,6 +370,132 @@
       "reranker_model": null,
       "is_neon": true,
       "is_retrieval_only": false
+    }
+  },
+  "retrievers": {
+    "bm25-only": {
+      "name": "bm25-only",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        }
+      ],
+      "summary": "BM25"
+    },
+    "embedding-bge-m3": {
+      "name": "embedding-bge-m3",
+      "components": [
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        }
+      ],
+      "summary": "Embedding (bge-m3)"
+    },
+    "embedding-bge-large": {
+      "name": "embedding-bge-large",
+      "components": [
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-large"
+        }
+      ],
+      "summary": "Embedding (bge-large)"
+    },
+    "hybrid": {
+      "name": "hybrid",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3)"
+    },
+    "hybrid-bge-large": {
+      "name": "hybrid-bge-large",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-large"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-large)"
+    },
+    "splade-only": {
+      "name": "splade-only",
+      "components": [
+        {
+          "key": "splade",
+          "label": "SPLADE"
+        }
+      ],
+      "summary": "SPLADE"
+    },
+    "hybrid-triple": {
+      "name": "hybrid-triple",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        },
+        {
+          "key": "splade",
+          "label": "SPLADE"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3) + SPLADE"
+    },
+    "hybrid-web": {
+      "name": "hybrid-web",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        },
+        {
+          "key": "web",
+          "label": "Web"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3) + Web"
+    }
+  },
+  "rerankers": {
+    "none": {
+      "name": "none",
+      "model": null
+    },
+    "minilm": {
+      "name": "minilm",
+      "model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    },
+    "mxbai": {
+      "name": "mxbai",
+      "model": "mixedbread-ai/mxbai-rerank-base-v1"
     }
   },
   "aggregates": [

@@ -250,6 +250,41 @@ def split_candidate(cid: str) -> Tuple[str, str, str]:
     return (parts[0], parts[1], parts[2]) if len(parts) == 3 else (cid, "", "")
 
 
+def _embedding_short(model: str) -> str:
+    """Friendly short name for an embedding model repo id."""
+    if not model:
+        return ""
+    tail = model.split("/")[-1]
+    return {
+        "bge-m3": "bge-m3",
+        "bge-large-en-v1.5": "bge-large",
+    }.get(tail, tail)
+
+
+def retriever_components(params: dict) -> List[dict]:
+    """Decompose a retriever's params into ordered component badges.
+
+    Mirrors configs/axes.retrieval.yaml: a retriever is some combination of
+    BM25 (lexical), dense Embedding (bge-m3 / bge-large), SPLADE (learned
+    sparse), and optional live Web search.
+    """
+    params = params or {}
+    comps: List[dict] = []
+    if params.get("enable_bm25"):
+        comps.append({"key": "bm25", "label": "BM25"})
+    if params.get("enable_embedding"):
+        comps.append({
+            "key": "emb",
+            "label": "Embedding",
+            "detail": _embedding_short(params.get("embedding_model", "")),
+        })
+    if params.get("enable_splade"):
+        comps.append({"key": "splade", "label": "SPLADE"})
+    if params.get("enable_web_search"):
+        comps.append({"key": "web", "label": "Web"})
+    return comps
+
+
 # Mirror of leaderboard.py _GLOSSARY (kept in sync with the source report).
 GLOSSARY = {
     "model": "The generation model in the pipeline. 'retrieval-only' means no LLM generation step was run for this row.",
@@ -304,12 +339,30 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
     aggregates: List[dict] = raw.get("aggregates", [])
     candidates_meta: List[dict] = raw.get("candidates", [])
 
-    # Candidate metadata map keyed by candidate_id.
+    # Candidate metadata map keyed by candidate_id, plus retriever / reranker
+    # composition maps shared across rows.
     cand_map: Dict[str, dict] = {}
+    retrievers: Dict[str, dict] = {}
+    rerankers: Dict[str, dict] = {}
     for c in candidates_meta:
         llm = c.get("llm", {}) or {}
         retr = c.get("retriever", {}) or {}
         rer = c.get("reranker", {}) or {}
+        rname = retr.get("name")
+        if rname and rname not in retrievers:
+            comps = retriever_components(retr.get("params", {}))
+            parts = [
+                (cp["label"] + (" (" + cp["detail"] + ")" if cp.get("detail") else ""))
+                for cp in comps
+            ]
+            retrievers[rname] = {
+                "name": rname,
+                "components": comps,
+                "summary": " + ".join(parts) if parts else rname,
+            }
+        rerk = rer.get("name")
+        if rerk and rerk not in rerankers:
+            rerankers[rerk] = {"name": rerk, "model": rer.get("model")}
         cid = f"{llm.get('name')}::{retr.get('name')}::{rer.get('name')}"
         cand_map[cid] = {
             "id": cid,
@@ -454,6 +507,8 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
         "date": date_str,
         "benchmarks": benchmarks,
         "candidates": cand_map,
+        "retrievers": retrievers,
+        "rerankers": rerankers,
         "aggregates": trimmed,
         "profiles": profiles_out,
         "picks": picks,

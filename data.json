@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-30T00:14:57.108981+00:00",
+  "generated_at": "2026-06-30T00:48:01.863256+00:00",
   "date": "2026-06-29",
   "benchmarks": [
     "dataset-neonai-qa",
@@ -5510,7 +5510,7 @@
   "glossary": {
     "model": "The generation model in the pipeline. 'retrieval-only' means no LLM generation step was run for this row.",
     "retriever": "Retrieval strategy used to fetch candidate documents (e.g. hybrid = BM25 + dense embeddings; bm25-only = lexical; splade-only = learned sparse).",
-    "rerank": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
+    "reranker": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
     "MRR": "Mean Reciprocal Rank — average of 1/rank for the first relevant doc retrieved per query. Range 0–1; higher is better.",
     "H@1": "Hit@1 — fraction of queries where the top-1 retrieved doc is relevant. Higher is better.",
     "H@5": "Hit@5 — fraction of queries where any of the top-5 retrieved docs is relevant. Higher is better.",

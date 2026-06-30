@@ -289,7 +289,7 @@ def retriever_components(params: dict) -> List[dict]:
 GLOSSARY = {
     "model": "The generation model in the pipeline. 'retrieval-only' means no LLM generation step was run for this row.",
     "retriever": "Retrieval strategy used to fetch candidate documents (e.g. hybrid = BM25 + dense embeddings; bm25-only = lexical; splade-only = learned sparse).",
-    "rerank": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
+    "reranker": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
     "MRR": "Mean Reciprocal Rank \u2014 average of 1/rank for the first relevant doc retrieved per query. Range 0\u20131; higher is better.",
     "H@1": "Hit@1 \u2014 fraction of queries where the top-1 retrieved doc is relevant. Higher is better.",
     "H@5": "Hit@5 \u2014 fraction of queries where any of the top-5 retrieved docs is relevant. Higher is better.",

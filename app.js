@@ -101,14 +101,14 @@
   function heatStyle(v, min, max, higher) {
     if (v == null || v === "" || max === min) return "";
     let t = (v - min) / (max - min);            // 0..1, 1 = numerically max
-    if (!higher) t = 1 - t;                       // 1 = good
-    const intensity = Math.abs(t - 0.5) * 2;      // 0 mid .. 1 extreme
-    const hue = t >= 0.5 ? 168 : 28;
+    if (!higher) t = 1 - t;                       // 1 = better
+    // Single-hue teal scale: current teal for the best values, a progressively
+    // lighter (fainter) teal toward the worst — no second (orange) hue.
     const dark = document.documentElement.getAttribute("data-theme") !== "light";
-    const light = dark ? 46 : 60;
-    const sat = dark ? 52 : 62;
-    const alpha = (0.05 + intensity * 0.30).toFixed(3);
-    return "background:hsla(" + hue + "," + sat + "%," + light + "%," + alpha + ")";
+    const light = dark ? 46 : 58;
+    const sat = dark ? 52 : 60;
+    const alpha = (0.05 + t * 0.32).toFixed(3);
+    return "background:hsla(168," + sat + "%," + light + "%," + alpha + ")";
   }
 
   // ---- searchable combobox (single select) ----
@@ -277,8 +277,8 @@
         { key: null, head: "retriever", thClass: "txt",
           tip: glossTip("retriever", "Badges list the retrieval components actually used in this pipeline."),
           render: r => retrieverCell(r) },
-        { key: "reranker", head: "rerank", thClass: "sortable",
-          tip: glossTip("rerank"),
+        { key: "reranker", head: "reranker", thClass: "sortable",
+          tip: glossTip("reranker"),
           render: r => rerankerCell(r) },
         { key: null, head: "DQ", thClass: "dq-col",
           tip: glossTip("DQ"),

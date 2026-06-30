@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-30T01:14:40.475200+00:00",
+  "generated_at": "2026-06-30T01:39:45.501910+00:00",
   "date": "2026-06-29",
   "benchmarks": [
     "dataset-neonai-qa",
@@ -5435,7 +5435,7 @@
       "label": "P50 ms",
       "field": "p50_retrieval_latency_ms",
       "higher": false,
-      "fmt": "f0",
+      "fmt": "g0",
       "tip": "P50",
       "scale": 1
     },
@@ -5444,7 +5444,7 @@
       "label": "P95 ms",
       "field": "p95_retrieval_latency_ms",
       "higher": false,
-      "fmt": "f0",
+      "fmt": "g0",
       "tip": "P95",
       "scale": 1
     },
@@ -5453,7 +5453,7 @@
       "label": "Build s",
       "field": "index_build_seconds",
       "higher": false,
-      "fmt": "f1",
+      "fmt": "g1",
       "tip": "build",
       "scale": 1
     },

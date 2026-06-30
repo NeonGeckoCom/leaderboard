@@ -64,8 +64,21 @@
   // ---- formatting ----
   function num(v, code) {
     if (v == null || v === "") return "";
+    v = Number(v);
+    // Adaptive codes (g0/g1/g2): keep the base precision for |v| >= 1, but for
+    // small values add just enough decimals (~2 sig figs, capped at 3) so they
+    // don't collapse to "0"; trailing zeros are trimmed so columns stay tight.
+    const base = { g0: 0, g1: 1, g2: 2 }[code];
+    if (base != null) {
+      if (v === 0) return "0";
+      const a = Math.abs(v);
+      const dec = a >= 1 ? base : Math.min(3, Math.max(base, 1 - Math.floor(Math.log10(a))));
+      let s = v.toFixed(dec);
+      if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+      return s;
+    }
     const d = { f0: 0, f1: 1, f2: 2, f3: 3, f5: 5 }[code];
-    return Number(v).toFixed(d == null ? 3 : d);
+    return v.toFixed(d == null ? 3 : d);
   }
   // Format a metric value, applying its display scale (e.g. $/kq = per-query × 1000).
   function mnum(v, m) {

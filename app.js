@@ -356,15 +356,35 @@
       ];
     } else {
       rows = (aggByCand[S.cand] || []).slice();
+      flagFor = r => {
+        const bt = D.bench_tables[r.benchmark] || { pareto: [], dq: {} };
+        return { pareto: bt.pareto.includes(r.candidate_id), dq: bt.dq[r.candidate_id] };
+      };
+      // Mirror the By-benchmark column structure (retriever components, reranker,
+      // DQ + metric columns) so both modes look and behave the same; the model is
+      // fixed here, so the "benchmark dataset" column takes that slot.
       descCols = [
+        compCol("emb", "Embedding"),
+        compCol("bm25", "BM25"),
+        compCol("splade", "SPLADE"),
+        compCol("web", "Web"),
         { key: "bench", head: "benchmark dataset", thClass: "txt lbl sortable",
           tip: "<b>benchmark dataset</b><br>The evaluation dataset for this row.",
-          render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>"),
+          render: r => {
+            const td = el("td", { class: "txt" });
+            if (flagFor(r).pareto) td.appendChild(el("span", { class: "star", text: "★ " }));
+            td.appendChild(el("span", { class: "pipe", text: benchShort(r.benchmark) }));
+            return bindTip(td, "<b>" + r.benchmark + "</b>");
+          },
           sortVal: r => ({ s: r.benchmark }) },
+        { key: "reranker", head: "reranker", thClass: "sortable",
+          tip: glossTip("reranker"),
+          render: r => rerankerCell(r),
+          sortVal: r => ({ s: r.reranker || "" }) },
         { key: "dq", head: "DQ", thClass: "dq-col sortable",
           tip: glossTip("DQ"),
-          render: r => dqCell((D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id]),
-          sortVal: r => ({ s: (D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id] || "" }) },
+          render: r => dqCell(flagFor(r).dq),
+          sortVal: r => ({ s: flagFor(r).dq || "" }) },
       ];
     }
 

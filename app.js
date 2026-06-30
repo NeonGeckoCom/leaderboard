@@ -339,8 +339,8 @@
     } else {
       rows = (aggByCand[S.cand] || []).slice();
       descCols = [
-        { key: "bench", head: "benchmark", thClass: "txt lbl sortable",
-          tip: "<b>benchmark</b><br>The evaluation dataset for this row.",
+        { key: "bench", head: "benchmark dataset", thClass: "txt lbl sortable",
+          tip: "<b>benchmark dataset</b><br>The evaluation dataset for this row.",
           render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>"),
           sortVal: r => ({ s: r.benchmark }) },
         { key: "dq", head: "DQ", thClass: "dq-col sortable",

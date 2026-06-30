@@ -238,7 +238,7 @@
     sortSel.value = S.sortKey;
   }
   fillSortSel();
-  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; render(); });
+  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; S.sortDir = METRIC_FIELDS.has(S.sortKey) ? -1 : 1; render(); });
   $("#sortDir").addEventListener("click", () => { S.sortDir *= -1; $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴"; render(); });
   $$("#cmpModeSeg button").forEach(b => b.addEventListener("click", () => {
     S.cmpMode = b.dataset.mode;
@@ -257,10 +257,41 @@
   function activeMetricCols(rows) {
     return METRICS.filter(m => rows.some(r => r[m.field] != null && r[m.field] !== ""));
   }
+  function hasComp(c, key) {
+    const meta = (D.retrievers || {})[c.retriever];
+    if (!meta) return null;
+    return meta.components.find(x => x.key === key) || null;
+  }
+  const COMP_TIP = {
+    emb: "Dense embedding retrieval (bge-m3 / bge-large). Empty = not used.",
+    bm25: "BM25 lexical (sparse keyword) retrieval. Empty = not used.",
+    splade: "SPLADE learned-sparse retrieval. Empty = not used.",
+    web: "Live web search (DuckDuckGo) merged into retrieval. Empty = not used.",
+  };
+  function compCell(c, key) {
+    const cp = hasComp(c, key);
+    const td = el("td", { class: "comp-col" });
+    if (cp) {
+      const txt = key === "emb" ? (cp.detail || "yes") : "\u2713";
+      td.appendChild(el("span", { class: "rbadge " + cp.key, text: txt }));
+      return bindTip(td, retrieverTip(c.retriever));
+    }
+    td.appendChild(el("span", { class: "dq-ok", text: "\u2014" }));
+    return bindTip(td, "Not used \u2014 retriever: <b>" + c.retriever + "</b>");
+  }
+  function compCol(key, label) {
+    return {
+      key: key, head: label, thClass: "comp-col sortable",
+      tip: "<b>" + label + "</b><br>" + COMP_TIP[key],
+      render: r => compCell(CANDS[r.candidate_id], key),
+      sortVal: r => { const cp = hasComp(CANDS[r.candidate_id], key); return { s: cp ? (key === "emb" ? (cp.detail || "yes") : "yes") : "" }; },
+    };
+  }
+
   function renderCompare() {
     const table = $("#cmpTable");
     table.innerHTML = "";
-    let rows, leftCols;
+    let rows, descCols, flagFor;
 
     if (S.cmpMode === "byBench") {
       const bt = D.bench_tables[S.bench] || { order: [], pareto: [], dq: {} };
@@ -269,99 +300,102 @@
       if (S.filterModel !== "__all__") rows = rows.filter(r => r.model === S.filterModel);
       if (S.neonOnly) rows = rows.filter(r => r.is_neon);
       if (!S.showDQ) rows = rows.filter(r => !bt.dq[r.candidate_id]);
-      const flagFor = r => ({ pareto: paretoSet.has(r.candidate_id), dq: bt.dq[r.candidate_id] });
-      leftCols = [
-        { key: "pipe", head: "model", thClass: "txt lbl sortable",
+      flagFor = r => ({ pareto: paretoSet.has(r.candidate_id), dq: bt.dq[r.candidate_id] });
+      descCols = [
+        compCol("emb", "Embedding"),
+        compCol("bm25", "BM25"),
+        compCol("splade", "SPLADE"),
+        compCol("web", "Web"),
+        { key: "model", head: "model", thClass: "txt lbl sortable",
           tip: glossTip("model", "\u201cno model\u201d = retrieval-only pipeline (no LLM generation step)."),
-          render: r => modelCell(r, flagFor(r)) },
-        { key: null, head: "retriever", thClass: "txt",
-          tip: glossTip("retriever", "Badges list the retrieval components actually used in this pipeline."),
-          render: r => retrieverCell(r) },
+          render: r => modelCell(r, flagFor(r)),
+          sortVal: r => ({ s: modelName(CANDS[r.candidate_id]) }) },
         { key: "reranker", head: "reranker", thClass: "sortable",
           tip: glossTip("reranker"),
-          render: r => rerankerCell(r) },
-        { key: null, head: "DQ", thClass: "dq-col",
+          render: r => rerankerCell(r),
+          sortVal: r => ({ s: r.reranker || "" }) },
+        { key: "dq", head: "DQ", thClass: "dq-col sortable",
           tip: glossTip("DQ"),
-          render: r => dqCell(flagFor(r).dq) },
+          render: r => dqCell(flagFor(r).dq),
+          sortVal: r => ({ s: flagFor(r).dq || "" }) },
       ];
     } else {
       rows = (aggByCand[S.cand] || []).slice();
-      leftCols = [
-        { key: "pipe", head: "benchmark", thClass: "txt lbl sortable",
+      descCols = [
+        { key: "bench", head: "benchmark", thClass: "txt lbl sortable",
           tip: "<b>benchmark</b><br>The evaluation dataset for this row.",
-          render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>") },
-        { key: null, head: "DQ", thClass: "dq-col",
+          render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>"),
+          sortVal: r => ({ s: r.benchmark }) },
+        { key: "dq", head: "DQ", thClass: "dq-col sortable",
           tip: glossTip("DQ"),
-          render: r => dqCell((D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id]) },
+          render: r => dqCell((D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id]),
+          sortVal: r => ({ s: (D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id] || "" }) },
       ];
     }
 
-    const cols = activeMetricCols(rows);
-
-    // sort (string keys for the left columns, numeric for metrics)
-    const strKey = (r, k) => {
-      if (k === "pipe") {
-        if (S.cmpMode !== "byBench") return r.benchmark;
-        const c = CANDS[r.candidate_id];
-        return modelName(c) + "|" + c.retriever + "|" + c.reranker;
-      }
-      if (k === "reranker") return r.reranker || "";
-      return null;
-    };
-    rows.sort((a, b) => {
-      const sa = strKey(a, S.sortKey);
-      if (sa !== null) {
-        const sb = strKey(b, S.sortKey);
-        return sa < sb ? S.sortDir : sa > sb ? -S.sortDir : 0;
-      }
-      const av = a[S.sortKey], bv = b[S.sortKey];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1; if (bv == null) return -1;
-      return (av - bv) * S.sortDir;
-    });
-
-    // column ranges for heat
+    const metricDefs = activeMetricCols(rows);
     const ranges = {};
-    cols.forEach(m => {
+    metricDefs.forEach(m => {
       const vs = rows.map(r => r[m.field]).filter(v => v != null && v !== "");
       ranges[m.field] = vs.length ? { min: Math.min(...vs), max: Math.max(...vs) } : null;
     });
-
-    // head
-    const thead = el("thead");
-    const htr = el("tr");
-    leftCols.forEach(lc => {
-      const arrow = (lc.key && S.sortKey === lc.key) ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
-      const th = el("th", { class: lc.thClass, html: lc.head + arrow });
-      if (lc.key) th.addEventListener("click", () => sortByCol(lc.key));
-      htr.appendChild(bindTip(th, lc.tip));
-    });
-    cols.forEach(m => {
-      const arrow = S.sortKey === m.field ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
-      htr.appendChild(bindTip(el("th", { class: "sortable", onclick: () => sortByCol(m.field), html: m.label + arrow }),
-        glossTip(m.tip, (m.higher ? "Higher is better." : "Lower is better."))));
-    });
-    thead.appendChild(htr); table.appendChild(thead);
-
-    // body
-    const tb = el("tbody");
-    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: leftCols.length + cols.length, class: "empty", text: "No rows match the current filters." }))); }
-    rows.forEach(r => {
-      const tr = el("tr", { class: r.is_neon ? "neon" : "" });
-      leftCols.forEach(lc => tr.appendChild(lc.render(r)));
-      cols.forEach(m => {
+    const metricCols = metricDefs.map(m => ({
+      key: m.field, head: m.label, thClass: "sortable",
+      tip: glossTip(m.tip, m.higher ? "Higher is better." : "Lower is better."),
+      render: r => {
         const v = r[m.field];
         const td = el("td", { text: num(v, m.fmt) });
         if (S.heat && ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher);
-        tr.appendChild(td);
-      });
+        return td;
+      },
+      sortVal: r => ({ n: r[m.field] }),
+    }));
+
+    const columns = descCols.concat(metricCols);
+
+    // every column is sortable; keep the dropdown in sync
+    const active = columns.find(c => c.key === S.sortKey) || columns[0];
+    S.sortKey = active.key;
+    sortSel.innerHTML = "";
+    columns.forEach(c => sortSel.appendChild(el("option", { value: c.key, text: c.head })));
+    sortSel.value = S.sortKey;
+    $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
+
+    rows.sort((a, b) => {
+      const va = active.sortVal(a), vb = active.sortVal(b);
+      if ("n" in va) {
+        const x = va.n, y = vb.n;
+        if (x == null && y == null) return 0;
+        if (x == null) return 1; if (y == null) return -1;
+        return (x - y) * S.sortDir;
+      }
+      const x = va.s, y = vb.s;
+      return x < y ? S.sortDir : x > y ? -S.sortDir : 0;
+    });
+
+    const thead = el("thead");
+    const htr = el("tr");
+    columns.forEach(c => {
+      const arrow = S.sortKey === c.key ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
+      const th = el("th", { class: c.thClass || "sortable", html: c.head + arrow });
+      th.addEventListener("click", () => sortByCol(c.key));
+      htr.appendChild(bindTip(th, c.tip));
+    });
+    thead.appendChild(htr); table.appendChild(thead);
+
+    const tb = el("tbody");
+    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: columns.length, class: "empty", text: "No rows match the current filters." }))); }
+    rows.forEach(r => {
+      const tr = el("tr", { class: r.is_neon ? "neon" : "" });
+      columns.forEach(c => tr.appendChild(c.render(r)));
       tb.appendChild(tr);
     });
     table.appendChild(tb);
   }
+  const METRIC_FIELDS = new Set(METRICS.map(m => m.field));
   function sortByCol(k) {
     if (S.sortKey === k) S.sortDir *= -1;
-    else { S.sortKey = k; S.sortDir = (k === "pipe" || k === "reranker") ? 1 : -1; }
+    else { S.sortKey = k; S.sortDir = METRIC_FIELDS.has(k) ? -1 : 1; }
     if ([...sortSel.options].some(o => o.value === k)) sortSel.value = k;
     $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
     render();

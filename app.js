@@ -180,6 +180,8 @@
     filterModel: "__all__",
     sortKey: "mrr",
     sortDir: -1,           // -1 desc, 1 asc
+    sortKey2: "", sortDir2: 1,   // secondary sort (tie-break)
+    sortKey3: "", sortDir3: 1,   // tertiary sort (tie-break)
     neonOnly: false,
     showDQ: true,
     heat: true,
@@ -230,16 +232,14 @@
     options: [{ value: "__all__", label: "All models" }].concat(MODEL_NAMES.map(m => ({ value: m, label: m, neon: (CANDS[CAND_IDS.find(id => CANDS[id].model === m)] || {}).is_neon }))),
     value: "__all__", width: 160, onChange: v => { S.filterModel = v; render(); }
   });
-  const sortSel = $("#sortSel");
-  function fillSortSel() {
-    sortSel.innerHTML = "";
-    sortSel.appendChild(el("option", { value: "pipe", text: "Model (A–Z)" }));
-    METRICS.forEach(m => sortSel.appendChild(el("option", { value: m.field, text: m.label })));
-    sortSel.value = S.sortKey;
-  }
-  fillSortSel();
-  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; S.sortDir = METRIC_FIELDS.has(S.sortKey) ? -1 : 1; render(); });
-  $("#sortDir").addEventListener("click", () => { S.sortDir *= -1; $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴"; render(); });
+  const sortSel = $("#sortSel"), sortSel2 = $("#sortSel2"), sortSel3 = $("#sortSel3");
+  const defDir = k => (METRIC_FIELDS.has(k) ? -1 : 1);
+  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; S.sortDir = defDir(S.sortKey); render(); });
+  sortSel2.addEventListener("change", () => { S.sortKey2 = sortSel2.value; if (S.sortKey2) S.sortDir2 = defDir(S.sortKey2); render(); });
+  sortSel3.addEventListener("change", () => { S.sortKey3 = sortSel3.value; if (S.sortKey3) S.sortDir3 = defDir(S.sortKey3); render(); });
+  $("#sortDir").addEventListener("click", () => { S.sortDir *= -1; render(); });
+  $("#sortDir2").addEventListener("click", () => { S.sortDir2 *= -1; render(); });
+  $("#sortDir3").addEventListener("click", () => { S.sortDir3 *= -1; render(); });
   $$("#cmpModeSeg button").forEach(b => b.addEventListener("click", () => {
     S.cmpMode = b.dataset.mode;
     $$("#cmpModeSeg button").forEach(x => x.classList.toggle("active", x === b));
@@ -352,25 +352,45 @@
     }));
 
     const columns = descCols.concat(metricCols);
+    const colMap = {};
+    columns.forEach(c => { colMap[c.key] = c; });
 
-    // every column is sortable; keep the dropdown in sync
-    const active = columns.find(c => c.key === S.sortKey) || columns[0];
-    S.sortKey = active.key;
-    sortSel.innerHTML = "";
-    columns.forEach(c => sortSel.appendChild(el("option", { value: c.key, text: c.head })));
-    sortSel.value = S.sortKey;
+    // every column is sortable, with up to three tie-break levels
+    if (!colMap[S.sortKey]) S.sortKey = columns[0].key;
+    const specs = [{ key: S.sortKey, dir: S.sortDir }];
+    if (S.sortKey2 && colMap[S.sortKey2] && S.sortKey2 !== S.sortKey)
+      specs.push({ key: S.sortKey2, dir: S.sortDir2 });
+    if (S.sortKey3 && colMap[S.sortKey3] && S.sortKey3 !== S.sortKey && S.sortKey3 !== S.sortKey2)
+      specs.push({ key: S.sortKey3, dir: S.sortDir3 });
+
+    // keep the three dropdowns + direction arrows in sync
+    const fillSel = (sel, val, withNone) => {
+      sel.innerHTML = "";
+      if (withNone) sel.appendChild(el("option", { value: "", text: "— none —" }));
+      columns.forEach(c => sel.appendChild(el("option", { value: c.key, text: c.head })));
+      sel.value = val;
+    };
+    fillSel(sortSel, S.sortKey, false);
+    fillSel(sortSel2, colMap[S.sortKey2] ? S.sortKey2 : "", true);
+    fillSel(sortSel3, colMap[S.sortKey3] ? S.sortKey3 : "", true);
     $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
+    $("#sortDir2").textContent = S.sortDir2 < 0 ? "▾" : "▴";
+    $("#sortDir3").textContent = S.sortDir3 < 0 ? "▾" : "▴";
 
-    rows.sort((a, b) => {
-      const va = active.sortVal(a), vb = active.sortVal(b);
+    const cmpSpec = (a, b, spec) => {
+      const va = colMap[spec.key].sortVal(a), vb = colMap[spec.key].sortVal(b);
       if ("n" in va) {
         const x = va.n, y = vb.n;
         if (x == null && y == null) return 0;
         if (x == null) return 1; if (y == null) return -1;
-        return (x - y) * S.sortDir;
+        return (x - y) * spec.dir;
       }
       const x = va.s, y = vb.s;
-      return x < y ? S.sortDir : x > y ? -S.sortDir : 0;
+      return x < y ? spec.dir : x > y ? -spec.dir : 0;
+    };
+    rows.sort((a, b) => {
+      for (const spec of specs) { const r = cmpSpec(a, b, spec); if (r) return r; }
+      return 0;
     });
 
     const thead = el("thead");

@@ -46,6 +46,10 @@
 
   const GLOSS = D.glossary || {};
   const METRICS = D.metrics_def;            // [{key,label,field,higher,fmt,tip}]
+  // field -> true when higher is better; used to default each column's sort so
+  // the best value lands on top (desc for higher-better, asc for lower-better).
+  const METRIC_HIGHER = {};
+  METRICS.forEach(m => { METRIC_HIGHER[m.field] = m.higher; });
   const BENCH = D.benchmarks;
   const AGG = D.aggregates;
   const CANDS = D.candidates;               // map id -> meta
@@ -114,18 +118,20 @@
     return "<b>" + term + "</b><br>" + (def || "") + (extra ? "<br><br>" + extra : "");
   }
 
-  // ---- color heat (diverging, low-glare) ----
+  // ---- color heat (sequential blue -> green, darker = better) ----
   function heatStyle(v, min, max, higher) {
     if (v == null || v === "" || max === min) return "";
     let t = (v - min) / (max - min);            // 0..1, 1 = numerically max
     if (!higher) t = 1 - t;                       // 1 = better
-    // Single-hue teal scale: current teal for the best values, a progressively
-    // lighter (fainter) teal toward the worst — no second (orange) hue.
+    // Smooth blue (worst) -> green (best) ramp that DARKENS as values improve.
+    // A monotonic luminance ramp is legible for every type of colour blindness
+    // and prints clearly; the blue->green hue shift is a secondary cue. Dark
+    // mode keeps a higher saturation floor so colours stay vivid on the dark UI.
     const dark = document.documentElement.getAttribute("data-theme") !== "light";
-    const light = dark ? 46 : 58;
-    const sat = dark ? 52 : 60;
-    const alpha = (0.05 + t * 0.32).toFixed(3);
-    return "background:hsla(168," + sat + "%," + light + "%," + alpha + ")";
+    const hue = 216 + (150 - 216) * t;            // 216 blue -> 150 green
+    const sat = dark ? 52 + 20 * t : 36 + 26 * t; // dark: 52->72%, light: 36->62%
+    const lgt = dark ? 44 - 24 * t : 93 - 28 * t; // dark: 44->20%, light: 93->65%
+    return "background:hsl(" + hue.toFixed(0) + "," + sat.toFixed(0) + "%," + lgt.toFixed(1) + "%)";
   }
 
   // ---- searchable combobox (single select) ----
@@ -250,7 +256,9 @@
     value: "__all__", width: 160, onChange: v => { S.filterModel = v; render(); }
   });
   const sortSel = $("#sortSel"), sortSel2 = $("#sortSel2"), sortSel3 = $("#sortSel3");
-  const defDir = k => (METRIC_FIELDS.has(k) ? -1 : 1);
+  // Default direction puts the best value on top: descending for higher-better
+  // metrics, ascending for lower-better metrics (and ascending A->Z otherwise).
+  const defDir = k => (k in METRIC_HIGHER ? (METRIC_HIGHER[k] ? -1 : 1) : 1);
   sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; S.sortDir = defDir(S.sortKey); render(); });
   sortSel2.addEventListener("change", () => { S.sortKey2 = sortSel2.value; if (S.sortKey2) S.sortDir2 = defDir(S.sortKey2); render(); });
   sortSel3.addEventListener("change", () => { S.sortKey3 = sortSel3.value; if (S.sortKey3) S.sortDir3 = defDir(S.sortKey3); render(); });
@@ -429,10 +437,9 @@
     });
     table.appendChild(tb);
   }
-  const METRIC_FIELDS = new Set(METRICS.map(m => m.field));
   function sortByCol(k) {
     if (S.sortKey === k) S.sortDir *= -1;
-    else { S.sortKey = k; S.sortDir = METRIC_FIELDS.has(k) ? -1 : 1; }
+    else { S.sortKey = k; S.sortDir = defDir(k); }
     if ([...sortSel.options].some(o => o.value === k)) sortSel.value = k;
     $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
     render();

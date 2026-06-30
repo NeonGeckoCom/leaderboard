@@ -1,4 +1,27 @@
 <!doctype html>
+<!--
+  NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System
+  All trademark and other rights reserved by their respective owners
+  Copyright 2008-2025 Neongecko.com Inc.
+  BSD-3 License
+
+  Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+  following conditions are met:
+  1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+  disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+  disclaimer in the documentation and/or other materials provided with the distribution.
+  3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products
+  derived from this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+  INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -154,12 +177,33 @@
 
   .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 650;
     letter-spacing: .3px; vertical-align: middle; }
-  .badge.neon { background: rgba(90,209,194,.16); color: var(--neon); border: 1px solid rgba(90,209,194,.3); }
+  /* NEON marker: plain text, no pill / background (per design request). */
+  .badge.neon { background: none; border: 0; padding: 0; color: var(--neon); font-size: 10px; font-weight: 700; letter-spacing: .5px; }
   .badge.pareto { background: rgba(120,170,255,.14); color: #8fb6ff; }
   .badge.dq { background: rgba(255,120,90,.13); color: #ff9b7d; border: 1px solid rgba(255,120,90,.25); }
   html[data-theme="light"] .badge.pareto { color: #2f5fc0; }
-  .star { color: #8fb6ff; font-size: 11px; }
+  .star { color: #d6b24a; font-size: 12px; }
+  html[data-theme="light"] .star { color: #b8860b; }
   .pipe small { color: var(--text-faint); }
+
+  /* Retriever component badges */
+  .rbadge { display: inline-block; padding: 1px 6px; margin: 1px 4px 1px 0; border-radius: 5px;
+    font-size: 10px; font-weight: 600; letter-spacing: .2px; border: 1px solid transparent; white-space: nowrap; }
+  .rbadge small { font-size: 1em; opacity: .8; font-weight: 500; margin-left: 4px; }
+  .rbadge.bm25   { background: rgba(120,160,255,.28); color: #c2d4ff; border-color: rgba(120,160,255,.55); }
+  .rbadge.emb    { background: rgba(63,182,168,.28);  color: #7ee6d6;  border-color: rgba(63,182,168,.55); }
+  .rbadge.splade { background: rgba(190,140,255,.28); color: #ddc4ff; border-color: rgba(190,140,255,.55); }
+  .rbadge.web    { background: rgba(230,170,90,.28);  color: #f3c98e; border-color: rgba(230,170,90,.55); }
+  html[data-theme="light"] .rbadge.bm25   { background: rgba(47,95,192,.18);  color: #244a99; border-color: rgba(47,95,192,.55); }
+  html[data-theme="light"] .rbadge.emb    { background: rgba(31,143,130,.18); color: #146b61; border-color: rgba(31,143,130,.55); }
+  html[data-theme="light"] .rbadge.splade { background: rgba(122,63,192,.18);  color: #5f2f99; border-color: rgba(122,63,192,.55); }
+  html[data-theme="light"] .rbadge.web    { background: rgba(154,106,26,.18);  color: #7a5214; border-color: rgba(154,106,26,.55); }
+  td.rerank-col { text-align: right; color: var(--text-dim); font-size: 12px; }
+  th.dq-col, td.dq-col { text-align: center; }
+  td.dq-col .dq-ok { color: var(--text-faint); }
+  th.comp-col, td.comp-col { text-align: center; }
+  td.comp-col .dq-ok { color: var(--text-faint); }
+  td.comp-col .rbadge { margin: 1px 0; }
 
   .verdict { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
   .v-clear { background: rgba(63,182,168,.18); color: var(--neon); }
@@ -249,6 +293,10 @@
     <div class="ctl"><label>Filter model</label><div class="combo" id="filterCombo"></div></div>
     <div class="ctl"><label>Sort</label><select class="field" id="sortSel"></select>
       <button class="icon-btn" id="sortDir" title="Sort direction" style="width:30px;height:30px">▾</button>
+      <label style="margin-left:8px">then</label><select class="field" id="sortSel2"></select>
+      <button class="icon-btn" id="sortDir2" title="Secondary sort direction" style="width:30px;height:30px">▾</button>
+      <label style="margin-left:8px">then</label><select class="field" id="sortSel3"></select>
+      <button class="icon-btn" id="sortDir3" title="Tertiary sort direction" style="width:30px;height:30px">▾</button>
     </div>
     <span class="spacer"></span>
     <label class="toggle"><input type="checkbox" id="neonOnly" /> Neon only</label>
@@ -299,9 +347,9 @@
   <footer class="bottom">
     <span class="lg"><span class="sw" id="lgGood"></span> higher rank</span>
     <span class="lg"><span class="sw" id="lgBad"></span> lower rank</span>
-    <span class="lg"><span class="badge neon" style="padding:0 6px">NEON</span> Neon.ai model</span>
+    <span class="lg"><span class="badge neon">NEON</span> Neon.ai model</span>
     <span class="lg"><span class="star">★</span> Pareto-optimal</span>
-    <span class="lg"><span class="badge dq" style="padding:0 6px">DQ</span> disqualified by a profile gate</span>
+    <span class="lg"><span class="badge dq-heat" id="lgDQ" style="padding:0 6px">DQ</span> gate failed &mdash; accuracy &rsaquo; cost &rsaquo; latency (green &#10003; passes)</span>
     <span class="spacer"></span>
     <span id="provFoot"></span>
   </footer>

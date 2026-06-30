@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+# NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System
+# All trademark and other rights reserved by their respective owners
+# Copyright 2008-2025 Neongecko.com Inc.
+# BSD-3 License
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+# following conditions are met:
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+# disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+# disclaimer in the documentation and/or other materials provided with the distribution.
+# 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products
+# derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build the static dashboard data bundle (``data.js``) for the Neon leaderboard.
 
 This reads the leaderboard's own source of truth -- ``run.json`` plus the
@@ -229,11 +250,46 @@ def split_candidate(cid: str) -> Tuple[str, str, str]:
     return (parts[0], parts[1], parts[2]) if len(parts) == 3 else (cid, "", "")
 
 
+def _embedding_short(model: str) -> str:
+    """Friendly short name for an embedding model repo id."""
+    if not model:
+        return ""
+    tail = model.split("/")[-1]
+    return {
+        "bge-m3": "bge-m3",
+        "bge-large-en-v1.5": "bge-large",
+    }.get(tail, tail)
+
+
+def retriever_components(params: dict) -> List[dict]:
+    """Decompose a retriever's params into ordered component badges.
+
+    Mirrors configs/axes.retrieval.yaml: a retriever is some combination of
+    BM25 (lexical), dense Embedding (bge-m3 / bge-large), SPLADE (learned
+    sparse), and optional live Web search.
+    """
+    params = params or {}
+    comps: List[dict] = []
+    if params.get("enable_bm25"):
+        comps.append({"key": "bm25", "label": "BM25"})
+    if params.get("enable_embedding"):
+        comps.append({
+            "key": "emb",
+            "label": "Embedding",
+            "detail": _embedding_short(params.get("embedding_model", "")),
+        })
+    if params.get("enable_splade"):
+        comps.append({"key": "splade", "label": "SPLADE"})
+    if params.get("enable_web_search"):
+        comps.append({"key": "web", "label": "Web"})
+    return comps
+
+
 # Mirror of leaderboard.py _GLOSSARY (kept in sync with the source report).
 GLOSSARY = {
     "model": "The generation model in the pipeline. 'retrieval-only' means no LLM generation step was run for this row.",
     "retriever": "Retrieval strategy used to fetch candidate documents (e.g. hybrid = BM25 + dense embeddings; bm25-only = lexical; splade-only = learned sparse).",
-    "rerank": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
+    "reranker": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
     "MRR": "Mean Reciprocal Rank \u2014 average of 1/rank for the first relevant doc retrieved per query. Range 0\u20131; higher is better.",
     "H@1": "Hit@1 \u2014 fraction of queries where the top-1 retrieved doc is relevant. Higher is better.",
     "H@5": "Hit@5 \u2014 fraction of queries where any of the top-5 retrieved docs is relevant. Higher is better.",
@@ -245,7 +301,7 @@ GLOSSARY = {
     "gen ms": "Median per-query generation latency (time-to-first-token + generation) in milliseconds. Lower is better.",
     "tok/s": "LLM output tokens generated per second on this benchmark. Higher is better.",
     "gen $": "Estimated generation cost per query in USD (token usage \u00d7 model price). Lower is better.",
-    "$/q": "Total estimated cost per query in USD (retrieval + generation). Lower is better.",
+    "$/kq": "Total estimated cost per 1,000 queries in USD (retrieval + generation). Lower is better.",
     "par": "Paraphrase robustness \u2014 MRR on paraphrased queries minus MRR on originals. Near zero is expected; large negative means fragile exact-match retrieval.",
     "shift": "Held-out (domain-shifted) slice MRR \u2014 measures out-of-distribution generalization on an unseen query subset.",
     "n": "Number of queries evaluated for this row.",
@@ -257,22 +313,24 @@ GLOSSARY = {
 }
 
 # Per-metric definitions used by the Compare and Metrics tabs.
-# key -> (label, field, higher_is_better, fmt, tooltip-key)
+# key -> (label, field, higher_is_better, fmt, tooltip-key, display_scale)
+# display_scale multiplies the stored value for presentation only (the raw
+# field is left untouched so hard-constraint gates keep using true values).
 METRICS = [
-    ("mrr", "MRR", "mrr", True, "f3", "MRR"),
-    ("h1", "H@1", "hit_at_1", True, "f2", "H@1"),
-    ("h5", "H@5", "hit_at_5", True, "f2", "H@5"),
-    ("ndcg", "nDCG", "ndcg_at_10", True, "f3", "nDCG"),
-    ("p50", "P50 ms", "p50_retrieval_latency_ms", False, "f0", "P50"),
-    ("p95", "P95 ms", "p95_retrieval_latency_ms", False, "f0", "P95"),
-    ("build", "Build s", "index_build_seconds", False, "f1", "build"),
-    ("gen", "gen", "generation_acc", True, "f3", "gen"),
-    ("gen_ms", "gen ms", "p50_generation_latency_ms", False, "f0", "gen ms"),
-    ("tok_s", "tok/s", "generation_tokens_per_sec", True, "f0", "tok/s"),
-    ("gen_cost", "gen $", "est_generation_cost_per_query_usd", False, "f5", "gen $"),
-    ("cost", "$/q", "est_cost_per_query_usd", False, "f5", "$/q"),
-    ("par", "par", "paraphrase_drop", True, "f3", "par"),
-    ("shift", "shift", "shift_drop", True, "f3", "shift"),
+    ("mrr", "MRR", "mrr", True, "f3", "MRR", 1),
+    ("h1", "H@1", "hit_at_1", True, "f2", "H@1", 1),
+    ("h5", "H@5", "hit_at_5", True, "f2", "H@5", 1),
+    ("ndcg", "nDCG", "ndcg_at_10", True, "f3", "nDCG", 1),
+    ("p50", "P50 ms", "p50_retrieval_latency_ms", False, "g0", "P50", 1),
+    ("p95", "P95 ms", "p95_retrieval_latency_ms", False, "g0", "P95", 1),
+    ("build", "Build s", "index_build_seconds", False, "g1", "build", 1),
+    ("gen", "gen", "generation_acc", True, "f3", "gen", 1),
+    ("gen_ms", "gen ms", "p50_generation_latency_ms", False, "f0", "gen ms", 1),
+    ("tok_s", "tok/s", "generation_tokens_per_sec", True, "f0", "tok/s", 1),
+    ("gen_cost", "gen $", "est_generation_cost_per_query_usd", False, "f5", "gen $", 1),
+    ("cost", "$/kq", "est_cost_per_query_usd", False, "f2", "$/kq", 1000),
+    ("par", "par", "paraphrase_drop", True, "f3", "par", 1),
+    ("shift", "shift", "shift_drop", True, "f3", "shift", 1),
 ]
 
 
@@ -283,12 +341,30 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
     aggregates: List[dict] = raw.get("aggregates", [])
     candidates_meta: List[dict] = raw.get("candidates", [])
 
-    # Candidate metadata map keyed by candidate_id.
+    # Candidate metadata map keyed by candidate_id, plus retriever / reranker
+    # composition maps shared across rows.
     cand_map: Dict[str, dict] = {}
+    retrievers: Dict[str, dict] = {}
+    rerankers: Dict[str, dict] = {}
     for c in candidates_meta:
         llm = c.get("llm", {}) or {}
         retr = c.get("retriever", {}) or {}
         rer = c.get("reranker", {}) or {}
+        rname = retr.get("name")
+        if rname and rname not in retrievers:
+            comps = retriever_components(retr.get("params", {}))
+            parts = [
+                (cp["label"] + (" (" + cp["detail"] + ")" if cp.get("detail") else ""))
+                for cp in comps
+            ]
+            retrievers[rname] = {
+                "name": rname,
+                "components": comps,
+                "summary": " + ".join(parts) if parts else rname,
+            }
+        rerk = rer.get("name")
+        if rerk and rerk not in rerankers:
+            rerankers[rerk] = {"name": rerk, "model": rer.get("model")}
         cid = f"{llm.get('name')}::{retr.get('name')}::{rer.get('name')}"
         cand_map[cid] = {
             "id": cid,
@@ -374,7 +450,7 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
     # ----- Per-metric win / loss tally across benchmarks -----
     EPS = 1e-9
     metric_stats: Dict[str, dict] = {}
-    for key, label, fieldname, higher, _fmt, _tip in METRICS:
+    for key, label, fieldname, higher, _fmt, _tip, _scale in METRICS:
         per_cand: Dict[str, dict] = {}
         for bench in benchmarks:
             vals = [
@@ -433,14 +509,16 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
         "date": date_str,
         "benchmarks": benchmarks,
         "candidates": cand_map,
+        "retrievers": retrievers,
+        "rerankers": rerankers,
         "aggregates": trimmed,
         "profiles": profiles_out,
         "picks": picks,
         "bench_tables": bench_tables,
         "metric_stats": metric_stats,
         "metrics_def": [
-            {"key": k, "label": l, "field": f, "higher": h, "fmt": fmt, "tip": t}
-            for (k, l, f, h, fmt, t) in METRICS
+            {"key": k, "label": l, "field": f, "higher": h, "fmt": fmt, "tip": t, "scale": sc}
+            for (k, l, f, h, fmt, t, sc) in METRICS
         ],
         "glossary": GLOSSARY,
         "provenance": header,
@@ -473,7 +551,33 @@ def main() -> None:
 
     data = build(args.run_json, args.profiles_dir)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    js_header = (
+        "/*\n"
+        " * NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System\n"
+        " * All trademark and other rights reserved by their respective owners\n"
+        " * Copyright 2008-2025 Neongecko.com Inc.\n"
+        " * BSD-3 License\n"
+        " *\n"
+        " * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the\n"
+        " * following conditions are met:\n"
+        " * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following\n"
+        " * disclaimer.\n"
+        " * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following\n"
+        " * disclaimer in the documentation and/or other materials provided with the distribution.\n"
+        " * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products\n"
+        " * derived from this software without specific prior written permission.\n"
+        " *\n"
+        " * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES,\n"
+        " * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\n"
+        " * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
+        " * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\n"
+        " * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,\n"
+        " * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF\n"
+        " * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
+        " */\n"
+    )
     args.out.write_text(
+        js_header +
         "// Auto-generated by scripts/build_data.py - do not edit by hand.\n"
         "window.LEADERBOARD_DATA = " + payload + ";\n",
         encoding="utf-8",

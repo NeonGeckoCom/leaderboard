@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-29T19:27:57.081535+00:00",
+  "generated_at": "2026-06-30T01:39:45.501910+00:00",
   "date": "2026-06-29",
   "benchmarks": [
     "dataset-neonai-qa",
@@ -370,6 +370,132 @@
       "reranker_model": null,
       "is_neon": true,
       "is_retrieval_only": false
+    }
+  },
+  "retrievers": {
+    "bm25-only": {
+      "name": "bm25-only",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        }
+      ],
+      "summary": "BM25"
+    },
+    "embedding-bge-m3": {
+      "name": "embedding-bge-m3",
+      "components": [
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        }
+      ],
+      "summary": "Embedding (bge-m3)"
+    },
+    "embedding-bge-large": {
+      "name": "embedding-bge-large",
+      "components": [
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-large"
+        }
+      ],
+      "summary": "Embedding (bge-large)"
+    },
+    "hybrid": {
+      "name": "hybrid",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3)"
+    },
+    "hybrid-bge-large": {
+      "name": "hybrid-bge-large",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-large"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-large)"
+    },
+    "splade-only": {
+      "name": "splade-only",
+      "components": [
+        {
+          "key": "splade",
+          "label": "SPLADE"
+        }
+      ],
+      "summary": "SPLADE"
+    },
+    "hybrid-triple": {
+      "name": "hybrid-triple",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        },
+        {
+          "key": "splade",
+          "label": "SPLADE"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3) + SPLADE"
+    },
+    "hybrid-web": {
+      "name": "hybrid-web",
+      "components": [
+        {
+          "key": "bm25",
+          "label": "BM25"
+        },
+        {
+          "key": "emb",
+          "label": "Embedding",
+          "detail": "bge-m3"
+        },
+        {
+          "key": "web",
+          "label": "Web"
+        }
+      ],
+      "summary": "BM25 + Embedding (bge-m3) + Web"
+    }
+  },
+  "rerankers": {
+    "none": {
+      "name": "none",
+      "model": null
+    },
+    "minilm": {
+      "name": "minilm",
+      "model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    },
+    "mxbai": {
+      "name": "mxbai",
+      "model": "mixedbread-ai/mxbai-rerank-base-v1"
     }
   },
   "aggregates": [
@@ -5274,7 +5400,8 @@
       "field": "mrr",
       "higher": true,
       "fmt": "f3",
-      "tip": "MRR"
+      "tip": "MRR",
+      "scale": 1
     },
     {
       "key": "h1",
@@ -5282,7 +5409,8 @@
       "field": "hit_at_1",
       "higher": true,
       "fmt": "f2",
-      "tip": "H@1"
+      "tip": "H@1",
+      "scale": 1
     },
     {
       "key": "h5",
@@ -5290,7 +5418,8 @@
       "field": "hit_at_5",
       "higher": true,
       "fmt": "f2",
-      "tip": "H@5"
+      "tip": "H@5",
+      "scale": 1
     },
     {
       "key": "ndcg",
@@ -5298,31 +5427,35 @@
       "field": "ndcg_at_10",
       "higher": true,
       "fmt": "f3",
-      "tip": "nDCG"
+      "tip": "nDCG",
+      "scale": 1
     },
     {
       "key": "p50",
       "label": "P50 ms",
       "field": "p50_retrieval_latency_ms",
       "higher": false,
-      "fmt": "f0",
-      "tip": "P50"
+      "fmt": "g0",
+      "tip": "P50",
+      "scale": 1
     },
     {
       "key": "p95",
       "label": "P95 ms",
       "field": "p95_retrieval_latency_ms",
       "higher": false,
-      "fmt": "f0",
-      "tip": "P95"
+      "fmt": "g0",
+      "tip": "P95",
+      "scale": 1
     },
     {
       "key": "build",
       "label": "Build s",
       "field": "index_build_seconds",
       "higher": false,
-      "fmt": "f1",
-      "tip": "build"
+      "fmt": "g1",
+      "tip": "build",
+      "scale": 1
     },
     {
       "key": "gen",
@@ -5330,7 +5463,8 @@
       "field": "generation_acc",
       "higher": true,
       "fmt": "f3",
-      "tip": "gen"
+      "tip": "gen",
+      "scale": 1
     },
     {
       "key": "gen_ms",
@@ -5338,7 +5472,8 @@
       "field": "p50_generation_latency_ms",
       "higher": false,
       "fmt": "f0",
-      "tip": "gen ms"
+      "tip": "gen ms",
+      "scale": 1
     },
     {
       "key": "tok_s",
@@ -5346,7 +5481,8 @@
       "field": "generation_tokens_per_sec",
       "higher": true,
       "fmt": "f0",
-      "tip": "tok/s"
+      "tip": "tok/s",
+      "scale": 1
     },
     {
       "key": "gen_cost",
@@ -5354,15 +5490,17 @@
       "field": "est_generation_cost_per_query_usd",
       "higher": false,
       "fmt": "f5",
-      "tip": "gen $"
+      "tip": "gen $",
+      "scale": 1
     },
     {
       "key": "cost",
-      "label": "$/q",
+      "label": "$/kq",
       "field": "est_cost_per_query_usd",
       "higher": false,
-      "fmt": "f5",
-      "tip": "$/q"
+      "fmt": "f2",
+      "tip": "$/kq",
+      "scale": 1000
     },
     {
       "key": "par",
@@ -5370,7 +5508,8 @@
       "field": "paraphrase_drop",
       "higher": true,
       "fmt": "f3",
-      "tip": "par"
+      "tip": "par",
+      "scale": 1
     },
     {
       "key": "shift",
@@ -5378,13 +5517,14 @@
       "field": "shift_drop",
       "higher": true,
       "fmt": "f3",
-      "tip": "shift"
+      "tip": "shift",
+      "scale": 1
     }
   ],
   "glossary": {
     "model": "The generation model in the pipeline. 'retrieval-only' means no LLM generation step was run for this row.",
     "retriever": "Retrieval strategy used to fetch candidate documents (e.g. hybrid = BM25 + dense embeddings; bm25-only = lexical; splade-only = learned sparse).",
-    "rerank": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
+    "reranker": "Cross-encoder reranker applied after retrieval ('none' = no reranking; minilm / mxbai are reranker models).",
     "MRR": "Mean Reciprocal Rank — average of 1/rank for the first relevant doc retrieved per query. Range 0–1; higher is better.",
     "H@1": "Hit@1 — fraction of queries where the top-1 retrieved doc is relevant. Higher is better.",
     "H@5": "Hit@5 — fraction of queries where any of the top-5 retrieved docs is relevant. Higher is better.",
@@ -5396,7 +5536,7 @@
     "gen ms": "Median per-query generation latency (time-to-first-token + generation) in milliseconds. Lower is better.",
     "tok/s": "LLM output tokens generated per second on this benchmark. Higher is better.",
     "gen $": "Estimated generation cost per query in USD (token usage × model price). Lower is better.",
-    "$/q": "Total estimated cost per query in USD (retrieval + generation). Lower is better.",
+    "$/kq": "Total estimated cost per 1,000 queries in USD (retrieval + generation). Lower is better.",
     "par": "Paraphrase robustness — MRR on paraphrased queries minus MRR on originals. Near zero is expected; large negative means fragile exact-match retrieval.",
     "shift": "Held-out (domain-shifted) slice MRR — measures out-of-distribution generalization on an unseen query subset.",
     "n": "Number of queries evaluated for this row.",

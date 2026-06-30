@@ -1,3 +1,26 @@
+/*
+ * NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System
+ * All trademark and other rights reserved by their respective owners
+ * Copyright 2008-2025 Neongecko.com Inc.
+ * BSD-3 License
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ * following conditions are met:
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ * disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+ * disclaimer in the documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products
+ * derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 /* Neon Leaderboard - static dashboard.
    All data is precomputed in data.js (window.LEADERBOARD_DATA) by
    scripts/build_data.py, faithful to the neon-router report logic. */
@@ -23,6 +46,10 @@
 
   const GLOSS = D.glossary || {};
   const METRICS = D.metrics_def;            // [{key,label,field,higher,fmt,tip}]
+  // field -> true when higher is better; used to default each column's sort so
+  // the best value lands on top (desc for higher-better, asc for lower-better).
+  const METRIC_HIGHER = {};
+  METRICS.forEach(m => { METRIC_HIGHER[m.field] = m.higher; });
   const BENCH = D.benchmarks;
   const AGG = D.aggregates;
   const CANDS = D.candidates;               // map id -> meta
@@ -41,12 +68,30 @@
   // ---- formatting ----
   function num(v, code) {
     if (v == null || v === "") return "";
+    v = Number(v);
+    // Adaptive codes (g0/g1/g2): keep the base precision for |v| >= 1, but for
+    // small values add just enough decimals (~2 sig figs, capped at 3) so they
+    // don't collapse to "0"; trailing zeros are trimmed so columns stay tight.
+    const base = { g0: 0, g1: 1, g2: 2 }[code];
+    if (base != null) {
+      if (v === 0) return "0";
+      const a = Math.abs(v);
+      const dec = a >= 1 ? base : Math.min(3, Math.max(base, 1 - Math.floor(Math.log10(a))));
+      let s = v.toFixed(dec);
+      if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+      return s;
+    }
     const d = { f0: 0, f1: 1, f2: 2, f3: 3, f5: 5 }[code];
-    return Number(v).toFixed(d == null ? 3 : d);
+    return v.toFixed(d == null ? 3 : d);
   }
+  // Format a metric value, applying its display scale (e.g. $/kq = per-query × 1000).
+  function mnum(v, m) {
+    return (v == null || v === "") ? "" : num(v * (m.scale || 1), m.fmt);
+  }
+  function modelName(c) { return c.is_retrieval_only ? "no model" : c.model; }
   function pipeLabel(c) {
     const r = c.reranker && c.reranker !== "none" ? " · " + c.reranker : "";
-    return c.model + " · " + c.retriever + r;
+    return modelName(c) + " · " + c.retriever + r;
   }
   function benchShort(b) { return b.replace(/^dataset-/, "").replace(/-qa$/, ""); }
 
@@ -73,18 +118,28 @@
     return "<b>" + term + "</b><br>" + (def || "") + (extra ? "<br><br>" + extra : "");
   }
 
-  // ---- color heat (diverging, low-glare) ----
+  // ---- color heat (sequential blue -> green, darker = better) ----
+  // Shared ramp: t in 0..1, 1 = best. Smooth blue (worst) -> green (best) that
+  // DARKENS as values improve. A monotonic luminance ramp is legible for every
+  // type of colour blindness and prints clearly; the blue->green hue shift is a
+  // secondary cue. Dark mode keeps a higher saturation floor so colours stay
+  // vivid on the dark UI. Returns just the hsl() colour.
+  function heatColor(t) {
+    const dark = document.documentElement.getAttribute("data-theme") !== "light";
+    const hue = 216 + (150 - 216) * t;            // 216 blue -> 150 green
+    const sat = dark ? 52 + 20 * t : 36 + 26 * t; // dark: 52->72%, light: 36->62%
+    const lgt = dark ? 44 - 24 * t : 93 - 28 * t; // dark: 44->20%, light: 93->65%
+    return "hsl(" + hue.toFixed(0) + "," + sat.toFixed(0) + "%," + lgt.toFixed(1) + "%)";
+  }
+  // Legible text colour to pair with a heat background in the current theme.
+  function heatInk() {
+    return document.documentElement.getAttribute("data-theme") !== "light" ? "#eef4f8" : "#15181d";
+  }
   function heatStyle(v, min, max, higher) {
     if (v == null || v === "" || max === min) return "";
     let t = (v - min) / (max - min);            // 0..1, 1 = numerically max
-    if (!higher) t = 1 - t;                       // 1 = good
-    const intensity = Math.abs(t - 0.5) * 2;      // 0 mid .. 1 extreme
-    const hue = t >= 0.5 ? 168 : 28;
-    const dark = document.documentElement.getAttribute("data-theme") !== "light";
-    const light = dark ? 46 : 60;
-    const sat = dark ? 52 : 62;
-    const alpha = (0.05 + intensity * 0.30).toFixed(3);
-    return "background:hsla(" + hue + "," + sat + "%," + light + "%," + alpha + ")";
+    if (!higher) t = 1 - t;                       // 1 = better
+    return "background:" + heatColor(t);
   }
 
   // ---- searchable combobox (single select) ----
@@ -156,6 +211,8 @@
     filterModel: "__all__",
     sortKey: "mrr",
     sortDir: -1,           // -1 desc, 1 asc
+    sortKey2: "", sortDir2: 1,   // secondary sort (tie-break)
+    sortKey3: "", sortDir3: 1,   // tertiary sort (tie-break)
     neonOnly: false,
     showDQ: true,
     heat: true,
@@ -176,6 +233,8 @@
   function paintLegendSwatches() {
     $("#lgGood").style.cssText = "width:11px;height:11px;border-radius:3px;display:inline-block;" + heatStyle(1, 0, 1, true);
     $("#lgBad").style.cssText = "width:11px;height:11px;border-radius:3px;display:inline-block;" + heatStyle(0, 0, 1, true);
+    const lgDQ = $("#lgDQ");
+    if (lgDQ) lgDQ.style.cssText = "padding:0 6px;background:" + heatColor(0) + ";color:" + heatInk() + ";border:1px solid rgba(128,128,128,.25)";
   }
 
   // ===================================================================
@@ -206,16 +265,16 @@
     options: [{ value: "__all__", label: "All models" }].concat(MODEL_NAMES.map(m => ({ value: m, label: m, neon: (CANDS[CAND_IDS.find(id => CANDS[id].model === m)] || {}).is_neon }))),
     value: "__all__", width: 160, onChange: v => { S.filterModel = v; render(); }
   });
-  const sortSel = $("#sortSel");
-  function fillSortSel() {
-    sortSel.innerHTML = "";
-    sortSel.appendChild(el("option", { value: "pipe", text: "Pipeline (A–Z)" }));
-    METRICS.forEach(m => sortSel.appendChild(el("option", { value: m.field, text: m.label })));
-    sortSel.value = S.sortKey;
-  }
-  fillSortSel();
-  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; render(); });
-  $("#sortDir").addEventListener("click", () => { S.sortDir *= -1; $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴"; render(); });
+  const sortSel = $("#sortSel"), sortSel2 = $("#sortSel2"), sortSel3 = $("#sortSel3");
+  // Default direction puts the best value on top: descending for higher-better
+  // metrics, ascending for lower-better metrics (and ascending A->Z otherwise).
+  const defDir = k => (k in METRIC_HIGHER ? (METRIC_HIGHER[k] ? -1 : 1) : 1);
+  sortSel.addEventListener("change", () => { S.sortKey = sortSel.value; S.sortDir = defDir(S.sortKey); render(); });
+  sortSel2.addEventListener("change", () => { S.sortKey2 = sortSel2.value; if (S.sortKey2) S.sortDir2 = defDir(S.sortKey2); render(); });
+  sortSel3.addEventListener("change", () => { S.sortKey3 = sortSel3.value; if (S.sortKey3) S.sortDir3 = defDir(S.sortKey3); render(); });
+  $("#sortDir").addEventListener("click", () => { S.sortDir *= -1; render(); });
+  $("#sortDir2").addEventListener("click", () => { S.sortDir2 *= -1; render(); });
+  $("#sortDir3").addEventListener("click", () => { S.sortDir3 *= -1; render(); });
   $$("#cmpModeSeg button").forEach(b => b.addEventListener("click", () => {
     S.cmpMode = b.dataset.mode;
     $$("#cmpModeSeg button").forEach(x => x.classList.toggle("active", x === b));
@@ -233,10 +292,41 @@
   function activeMetricCols(rows) {
     return METRICS.filter(m => rows.some(r => r[m.field] != null && r[m.field] !== ""));
   }
+  function hasComp(c, key) {
+    const meta = (D.retrievers || {})[c.retriever];
+    if (!meta) return null;
+    return meta.components.find(x => x.key === key) || null;
+  }
+  const COMP_TIP = {
+    emb: "Dense embedding retrieval (bge-m3 / bge-large). Empty = not used.",
+    bm25: "BM25 lexical (sparse keyword) retrieval. Empty = not used.",
+    splade: "SPLADE learned-sparse retrieval. Empty = not used.",
+    web: "Live web search (DuckDuckGo) merged into retrieval. Empty = not used.",
+  };
+  function compCell(c, key) {
+    const cp = hasComp(c, key);
+    const td = el("td", { class: "comp-col" });
+    if (cp) {
+      const txt = key === "emb" ? (cp.detail || "yes") : "\u2713";
+      td.appendChild(el("span", { class: "rbadge " + cp.key, text: txt }));
+      return bindTip(td, retrieverTip(c.retriever));
+    }
+    td.appendChild(el("span", { class: "dq-ok", text: "\u2014" }));
+    return bindTip(td, "Not used \u2014 retriever: <b>" + c.retriever + "</b>");
+  }
+  function compCol(key, label) {
+    return {
+      key: key, head: label, thClass: "comp-col sortable",
+      tip: "<b>" + label + "</b><br>" + COMP_TIP[key],
+      render: r => compCell(CANDS[r.candidate_id], key),
+      sortVal: r => { const cp = hasComp(CANDS[r.candidate_id], key); return { s: cp ? (key === "emb" ? (cp.detail || "yes") : "yes") : "" }; },
+    };
+  }
+
   function renderCompare() {
     const table = $("#cmpTable");
     table.innerHTML = "";
-    let rows, flagFor, leftHead, leftCell;
+    let rows, descCols, flagFor;
 
     if (S.cmpMode === "byBench") {
       const bt = D.bench_tables[S.bench] || { order: [], pareto: [], dq: {} };
@@ -246,79 +336,213 @@
       if (S.neonOnly) rows = rows.filter(r => r.is_neon);
       if (!S.showDQ) rows = rows.filter(r => !bt.dq[r.candidate_id]);
       flagFor = r => ({ pareto: paretoSet.has(r.candidate_id), dq: bt.dq[r.candidate_id] });
-      leftHead = "pipeline"; leftCell = r => pipeCell(r, flagFor(r));
+      descCols = [
+        compCol("emb", "Embedding"),
+        compCol("bm25", "BM25"),
+        compCol("splade", "SPLADE"),
+        compCol("web", "Web"),
+        { key: "model", head: "model", thClass: "txt lbl sortable",
+          tip: glossTip("model", "\u201cno model\u201d = retrieval-only pipeline (no LLM generation step)."),
+          render: r => modelCell(r, flagFor(r)),
+          sortVal: r => ({ s: modelName(CANDS[r.candidate_id]) }) },
+        { key: "reranker", head: "reranker", thClass: "sortable",
+          tip: glossTip("reranker"),
+          render: r => rerankerCell(r),
+          sortVal: r => ({ s: r.reranker || "" }) },
+        { key: "dq", head: "DQ", thClass: "dq-col sortable",
+          tip: glossTip("DQ"),
+          render: r => dqCell(flagFor(r).dq),
+          sortVal: r => ({ s: flagFor(r).dq || "" }) },
+      ];
     } else {
       rows = (aggByCand[S.cand] || []).slice();
-      flagFor = () => ({});
-      leftHead = "benchmark";
-      leftCell = r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>");
+      flagFor = r => {
+        const bt = D.bench_tables[r.benchmark] || { pareto: [], dq: {} };
+        return { pareto: bt.pareto.includes(r.candidate_id), dq: bt.dq[r.candidate_id] };
+      };
+      // Mirror the By-benchmark column structure (retriever components, reranker,
+      // DQ + metric columns) so both modes look and behave the same; the model is
+      // fixed here, so the "benchmark dataset" column takes that slot.
+      descCols = [
+        compCol("emb", "Embedding"),
+        compCol("bm25", "BM25"),
+        compCol("splade", "SPLADE"),
+        compCol("web", "Web"),
+        { key: "bench", head: "benchmark dataset", thClass: "txt lbl sortable",
+          tip: "<b>benchmark dataset</b><br>The evaluation dataset for this row.",
+          render: r => {
+            const td = el("td", { class: "txt" });
+            if (flagFor(r).pareto) td.appendChild(el("span", { class: "star", text: "★ " }));
+            td.appendChild(el("span", { class: "pipe", text: benchShort(r.benchmark) }));
+            return bindTip(td, "<b>" + r.benchmark + "</b>");
+          },
+          sortVal: r => ({ s: r.benchmark }) },
+        { key: "reranker", head: "reranker", thClass: "sortable",
+          tip: glossTip("reranker"),
+          render: r => rerankerCell(r),
+          sortVal: r => ({ s: r.reranker || "" }) },
+        { key: "dq", head: "DQ", thClass: "dq-col sortable",
+          tip: glossTip("DQ"),
+          render: r => dqCell(flagFor(r).dq),
+          sortVal: r => ({ s: flagFor(r).dq || "" }) },
+      ];
     }
 
-    const cols = activeMetricCols(rows);
-    // sort
-    rows.sort((a, b) => {
-      if (S.sortKey === "pipe") {
-        const av = S.cmpMode === "byBench" ? pipeLabel(CANDS[a.candidate_id]) : a.benchmark;
-        const bv = S.cmpMode === "byBench" ? pipeLabel(CANDS[b.candidate_id]) : b.benchmark;
-        return av < bv ? S.sortDir : av > bv ? -S.sortDir : 0;
-      }
-      const av = a[S.sortKey], bv = b[S.sortKey];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1; if (bv == null) return -1;
-      return (av - bv) * S.sortDir;
-    });
-
-    // column ranges for heat
+    const metricDefs = activeMetricCols(rows);
     const ranges = {};
-    cols.forEach(m => {
+    metricDefs.forEach(m => {
       const vs = rows.map(r => r[m.field]).filter(v => v != null && v !== "");
       ranges[m.field] = vs.length ? { min: Math.min(...vs), max: Math.max(...vs) } : null;
     });
+    const metricCols = metricDefs.map(m => ({
+      key: m.field, head: m.label, thClass: "sortable",
+      tip: glossTip(m.tip, m.higher ? "Higher is better." : "Lower is better."),
+      render: r => {
+        const v = r[m.field];
+        const td = el("td", { text: mnum(v, m) });
+        if (S.heat && ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher);
+        return td;
+      },
+      sortVal: r => ({ n: r[m.field] }),
+    }));
 
-    // head
+    const columns = descCols.concat(metricCols);
+    const colMap = {};
+    columns.forEach(c => { colMap[c.key] = c; });
+
+    // every column is sortable, with up to three tie-break levels
+    if (!colMap[S.sortKey]) S.sortKey = columns[0].key;
+    const specs = [{ key: S.sortKey, dir: S.sortDir }];
+    if (S.sortKey2 && colMap[S.sortKey2] && S.sortKey2 !== S.sortKey)
+      specs.push({ key: S.sortKey2, dir: S.sortDir2 });
+    if (S.sortKey3 && colMap[S.sortKey3] && S.sortKey3 !== S.sortKey && S.sortKey3 !== S.sortKey2)
+      specs.push({ key: S.sortKey3, dir: S.sortDir3 });
+
+    // keep the three dropdowns + direction arrows in sync
+    const fillSel = (sel, val, withNone) => {
+      sel.innerHTML = "";
+      if (withNone) sel.appendChild(el("option", { value: "", text: "— none —" }));
+      columns.forEach(c => sel.appendChild(el("option", { value: c.key, text: c.head })));
+      sel.value = val;
+    };
+    fillSel(sortSel, S.sortKey, false);
+    fillSel(sortSel2, colMap[S.sortKey2] ? S.sortKey2 : "", true);
+    fillSel(sortSel3, colMap[S.sortKey3] ? S.sortKey3 : "", true);
+    $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
+    $("#sortDir2").textContent = S.sortDir2 < 0 ? "▾" : "▴";
+    $("#sortDir3").textContent = S.sortDir3 < 0 ? "▾" : "▴";
+
+    const cmpSpec = (a, b, spec) => {
+      const va = colMap[spec.key].sortVal(a), vb = colMap[spec.key].sortVal(b);
+      if ("n" in va) {
+        const x = va.n, y = vb.n;
+        if (x == null && y == null) return 0;
+        if (x == null) return 1; if (y == null) return -1;
+        return (x - y) * spec.dir;
+      }
+      const x = va.s, y = vb.s;
+      return x < y ? spec.dir : x > y ? -spec.dir : 0;
+    };
+    rows.sort((a, b) => {
+      for (const spec of specs) { const r = cmpSpec(a, b, spec); if (r) return r; }
+      return 0;
+    });
+
     const thead = el("thead");
     const htr = el("tr");
-    htr.appendChild(bindTip(el("th", { class: "txt lbl sortable", onclick: () => sortByCol("pipe"), html: leftHead + (S.sortKey === "pipe" ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "") }),
-      S.cmpMode === "byBench" ? glossTip("pipeline", "model · retriever · reranker") : "<b>benchmark</b><br>The evaluation dataset for this row."));
-    cols.forEach(m => {
-      const arrow = S.sortKey === m.field ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
-      htr.appendChild(bindTip(el("th", { class: "sortable", onclick: () => sortByCol(m.field), html: m.label + arrow }),
-        glossTip(m.tip, (m.higher ? "Higher is better." : "Lower is better."))));
+    columns.forEach(c => {
+      const arrow = S.sortKey === c.key ? " <span class='arrow'>" + (S.sortDir < 0 ? "▼" : "▲") + "</span>" : "";
+      const th = el("th", { class: c.thClass || "sortable", html: c.head + arrow });
+      th.addEventListener("click", () => sortByCol(c.key));
+      htr.appendChild(bindTip(th, c.tip));
     });
     thead.appendChild(htr); table.appendChild(thead);
 
-    // body
     const tb = el("tbody");
-    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: cols.length + 1, class: "empty", text: "No rows match the current filters." }))); }
+    if (!rows.length) { tb.appendChild(el("tr", null, el("td", { colspan: columns.length, class: "empty", text: "No rows match the current filters." }))); }
     rows.forEach(r => {
       const tr = el("tr", { class: r.is_neon ? "neon" : "" });
-      tr.appendChild(leftCell(r));
-      cols.forEach(m => {
-        const v = r[m.field];
-        const td = el("td", { text: num(v, m.fmt) });
-        if (S.heat && ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher);
-        tr.appendChild(td);
-      });
+      columns.forEach(c => tr.appendChild(c.render(r)));
       tb.appendChild(tr);
     });
     table.appendChild(tb);
   }
-  function sortByCol(k) { if (S.sortKey === k) S.sortDir *= -1; else { S.sortKey = k; S.sortDir = (k === "pipe") ? 1 : -1; } sortSel.value = k; $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴"; render(); }
+  function sortByCol(k) {
+    if (S.sortKey === k) S.sortDir *= -1;
+    else { S.sortKey = k; S.sortDir = defDir(k); }
+    if ([...sortSel.options].some(o => o.value === k)) sortSel.value = k;
+    $("#sortDir").textContent = S.sortDir < 0 ? "▾" : "▴";
+    render();
+  }
 
-  function pipeCell(r, flag) {
+  function modelCell(r, flag) {
     const c = CANDS[r.candidate_id];
-    const inner = el("span", { class: "pipe" });
-    if (flag.pareto) inner.appendChild(el("span", { class: "star", text: "★ " }));
-    inner.appendChild(el("b", { text: c.model }));
-    inner.appendChild(el("small", { text: "  " + c.retriever + (c.reranker !== "none" ? " · " + c.reranker : "") }));
     const td = el("td", { class: "txt" });
-    if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:6px" }));
-    td.appendChild(inner);
-    if (flag.dq) td.appendChild(el("span", { class: "badge dq", text: "DQ:" + flag.dq, style: "margin-left:7px" }));
-    return bindTip(td, "<b>" + pipeLabel(c) + "</b>" +
-      (c.model_repo ? "<br>repo: " + c.model_repo : "") +
-      (flag.dq ? "<br><br>Disqualified by a profile's <b>" + flag.dq + "</b> gate." : "") +
-      (flag.pareto ? "<br><br>★ On the Pareto front (not dominated on accuracy / latency / build-cost)." : ""));
+    td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelName(c) })));
+    if (flag.pareto) td.appendChild(el("span", { class: "star", text: "★", style: "margin-left:6px" }));
+    const head = c.is_retrieval_only
+      ? "<b>no model</b><br>Retrieval-only pipeline \u2014 the \u201cretrieval-only\u201d candidate runs no LLM generation step."
+      : "<b>" + c.model + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : "");
+    return bindTip(td, head +
+      (flag.pareto ? "<br><br>\u2605 On the Pareto front (not dominated on accuracy / latency / build-cost)." : ""));
+  }
+
+  const DQ_REASON = {
+    latency: "p50 / average latency over a profile's budget.",
+    cost: "cost per query over a profile's ceiling.",
+    accuracy: "MRR or generation score below a profile's floor.",
+  };
+  // Severity mapped onto the shared heat ramp: accuracy is the most important
+  // gate (worst failure -> blue, t=0), cost is middle, latency is least
+  // important (second-best -> t=0.75). The best colour (t=1, green) is reserved
+  // for pipelines that pass every gate.
+  const DQ_T = { accuracy: 0, cost: 0.5, latency: 0.75 };
+  function dqBadge(text, t) {
+    return el("span", {
+      class: "badge dq-heat", text: text,
+      style: "background:" + heatColor(t) + ";color:" + heatInk() + ";border:1px solid rgba(128,128,128,.25)",
+    });
+  }
+  function dqCell(reason) {
+    const td = el("td", { class: "dq-col" });
+    if (reason) {
+      td.appendChild(dqBadge(reason, DQ_T[reason] != null ? DQ_T[reason] : 0));
+      return bindTip(td, "<b>DQ \u2014 " + reason + "</b><br>" + (DQ_REASON[reason] || "") +
+        "<br><br>Reason shown is from the first profile that disqualified this pipeline; other profiles may flag a different gate.");
+    }
+    td.appendChild(dqBadge("\u2713", 1));
+    return bindTip(td, "Passes every profile's hard gates (not disqualified).");
+  }
+
+  // Build the retriever component badges (reused across Compare/Picks/Models/Metrics).
+  function retrieverBadgeEls(name) {
+    const meta = (D.retrievers || {})[name];
+    if (!meta || !meta.components.length) return [el("span", { class: "pipe", text: name })];
+    return meta.components.map(cp => {
+      const b = el("span", { class: "rbadge " + cp.key, text: cp.label });
+      if (cp.detail) b.appendChild(el("small", { text: cp.detail }));
+      return b;
+    });
+  }
+  function retrieverTip(name) {
+    const meta = (D.retrievers || {})[name];
+    return "<b>" + name + "</b>" + (meta ? "<br>" + meta.summary : "");
+  }
+  function rerankerTip(c) {
+    return "<b>" + c.reranker + "</b>" +
+      (c.reranker_model ? "<br>" + c.reranker_model : (c.reranker === "none" ? "<br>No reranking applied." : ""));
+  }
+
+  function retrieverCell(r) {
+    const td = el("td", { class: "txt" });
+    retrieverBadgeEls(r.retriever).forEach(b => td.appendChild(b));
+    return bindTip(td, retrieverTip(r.retriever));
+  }
+
+  function rerankerCell(r) {
+    const c = CANDS[r.candidate_id];
+    const td = el("td", { class: "rerank-col", text: r.reranker });
+    return bindTip(td, rerankerTip(c));
   }
 
   // ===================================================================
@@ -349,14 +573,22 @@
         if (cell && cell.pick) {
           const c = CANDS[cell.pick];
           const wrap = el("div");
-          const line = el("div", { style: "font-family:var(--mono);font-size:11.5px;margin-bottom:4px" });
-          if (c && c.is_neon) line.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:5px" }));
-          line.appendChild(el("span", { text: cell.model + " · " + cell.retriever }));
+          const line = el("div", { style: "display:flex;align-items:center;gap:5px;margin-bottom:4px" });
+          line.appendChild(el("span", { text: c ? modelName(c) : cell.model, style: "font-family:var(--mono);font-size:11.5px" }));
+          if (c && c.is_neon) line.appendChild(el("span", { class: "badge neon", text: "NEON" }));
           wrap.appendChild(line);
-          const mv = cell.metric === "generation_acc" ? "gen " + num(cell.metric_val, "f2") : "H@1 " + num(cell.metric_val, "f2");
+          const pl = el("div", { style: "display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-bottom:4px" });
+          retrieverBadgeEls(cell.retriever).forEach(b => pl.appendChild(b));
+          if (c && c.reranker && c.reranker !== "none") pl.appendChild(el("span", { class: "cell-sub", text: "· " + c.reranker }));
+          wrap.appendChild(bindTip(pl, retrieverTip(cell.retriever) + (c && c.reranker !== "none" ? "<br><br>" + rerankerTip(c) : "")));
+          const mvLabel = cell.metric === "generation_acc" ? "gen" : "H@1";
+          const subParts = [];
+          const mrrS = num(cell.mrr, "f3"); if (mrrS !== "") subParts.push("MRR " + mrrS);
+          const mvS = num(cell.metric_val, "f2"); if (mvS !== "") subParts.push(mvLabel + " " + mvS);
+          const p50S = num(cell.p50, "g0"); if (p50S !== "") subParts.push("p50 " + p50S + "ms");
           wrap.appendChild(bindTip(el("span", { class: "verdict " + (VCLASS[cell.verdict] || "v-none"), text: cell.verdict }),
             glossTip("verdict") ));
-          wrap.appendChild(el("span", { class: "cell-sub", text: "MRR " + num(cell.mrr, "f3") + " · " + mv + " · p50 " + num(cell.p50, "f0") + "ms" }));
+          wrap.appendChild(el("span", { class: "cell-sub", text: subParts.join(" · ") }));
           td.appendChild(wrap);
         } else {
           td.appendChild(el("span", { class: "verdict " + (VCLASS[(cell && cell.verdict)] || "v-dq"), text: (cell && cell.verdict) || "—" }));
@@ -386,9 +618,12 @@
 
     // left card
     const left = el("div", { class: "card" });
-    left.appendChild(el("h3", { style: "margin:0 0 10px;font-size:14px", text: c.model }));
+    left.appendChild(el("h3", { style: "margin:0 0 10px;font-size:14px", text: modelName(c) }));
+    const retV = el("span", { class: "v", style: "display:flex;flex-wrap:wrap;justify-content:flex-end;gap:3px" });
+    retrieverBadgeEls(c.retriever).forEach(b => retV.appendChild(b));
+    left.appendChild(bindTip(el("div", { class: "kv" }, [el("span", { class: "k", text: "retriever" }), retV]), retrieverTip(c.retriever)));
     const kvs = [
-      ["pipeline", c.retriever + (c.reranker !== "none" ? " · " + c.reranker : "")],
+      ["reranker", c.reranker],
       ["model repo", c.model_repo || "—"],
       ["serving", c.model_adapter || "—"],
       ["benchmarks", String(rows.length)],
@@ -399,7 +634,7 @@
     const stat = (n, l, tipTerm) => { const s = el("div", { class: "stat" }, [el("div", { class: "n", text: n }), bindTip(el("div", { class: "l", text: l }), glossTip(tipTerm))]); stats.appendChild(s); };
     stat(num(mean("mrr"), "f3"), "mean MRR", "MRR");
     const gm = mean("generation_acc"); stat(gm == null ? "—" : num(gm, "f2"), "mean gen", "gen");
-    stat(num(mean("p50_retrieval_latency_ms"), "f0"), "p50 ms", "P50");
+    stat(num(mean("p50_retrieval_latency_ms"), "g0"), "p50 ms", "P50");
     stat(String(paretoCount), "Pareto ★", "Pareto");
     stat(String(dqCount), "DQ count", "DQ");
     left.appendChild(stats);
@@ -411,6 +646,7 @@
     const table = el("table");
     const thead = el("thead"); const htr = el("tr");
     htr.appendChild(el("th", { class: "txt", text: "benchmark", style: "text-align:left;position:sticky;top:0;background:var(--bg-elev)" }));
+    htr.appendChild(bindTip(el("th", { class: "dq-col", html: "DQ", style: "position:sticky;top:0;background:var(--bg-elev)" }), glossTip("DQ")));
     cols.forEach(m => htr.appendChild(bindTip(el("th", { html: m.label, style: "position:sticky;top:0;background:var(--bg-elev)" }), glossTip(m.tip, m.higher ? "Higher is better." : "Lower is better."))));
     thead.appendChild(htr); table.appendChild(thead);
     const ranges = {}; cols.forEach(m => { const vs = rows.map(r => r[m.field]).filter(v => v != null); ranges[m.field] = vs.length ? { min: Math.min(...vs), max: Math.max(...vs) } : null; });
@@ -419,10 +655,10 @@
       const bt = D.bench_tables[r.benchmark];
       const tr = el("tr");
       const star = bt && bt.pareto.includes(id) ? el("span", { class: "star", text: "★ " }) : null;
-      const dq = bt && bt.dq[id] ? el("span", { class: "badge dq", text: "DQ:" + bt.dq[id], style: "margin-left:6px" }) : null;
-      const tdL = el("td", { class: "txt" }); if (star) tdL.appendChild(star); tdL.appendChild(el("span", { text: benchShort(r.benchmark) })); if (dq) tdL.appendChild(dq);
+      const tdL = el("td", { class: "txt" }); if (star) tdL.appendChild(star); tdL.appendChild(el("span", { text: benchShort(r.benchmark) }));
       tr.appendChild(tdL);
-      cols.forEach(m => { const v = r[m.field]; const td = el("td", { text: num(v, m.fmt) }); if (ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher); tr.appendChild(td); });
+      tr.appendChild(dqCell(bt && bt.dq[id]));
+      cols.forEach(m => { const v = r[m.field]; const td = el("td", { text: mnum(v, m) }); if (ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher); tr.appendChild(td); });
       tb.appendChild(tr);
     });
     table.appendChild(tb); right.appendChild(table); host.appendChild(right);
@@ -434,7 +670,7 @@
   const metricSortSel = $("#metricSortSel");
   function fillMetricSort() {
     metricSortSel.innerHTML = "";
-    metricSortSel.appendChild(el("option", { value: "name", text: "Pipeline (A–Z)" }));
+    metricSortSel.appendChild(el("option", { value: "name", text: "Model (A–Z)" }));
     METRICS.forEach(m => metricSortSel.appendChild(el("option", { value: m.key, text: m.label })));
     metricSortSel.value = S.metricSort;
   }
@@ -476,10 +712,14 @@
     ids.forEach(id => {
       const c = CANDS[id];
       const tr = el("tr", { class: c.is_neon ? "neon" : "" });
-      const th = el("th", { style: "font-family:var(--mono);font-size:11.5px" });
-      if (c.is_neon) th.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:5px" }));
-      th.appendChild(el("span", { text: pipeLabel(c) }));
-      bindTip(th, "<b>" + pipeLabel(c) + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : ""));
+      const th = el("th", { style: "font-size:11.5px" });
+      const idLine = el("div", { style: "display:flex;align-items:center;gap:5px;white-space:nowrap" });
+      idLine.appendChild(el("span", { text: modelName(c), style: "font-family:var(--mono)" }));
+      if (c.is_neon) idLine.appendChild(el("span", { class: "badge neon", text: "NEON" }));
+      retrieverBadgeEls(c.retriever).forEach(b => idLine.appendChild(b));
+      if (c.reranker !== "none") idLine.appendChild(el("span", { class: "cell-sub", text: c.reranker }));
+      th.appendChild(idLine);
+      bindTip(th, "<b>" + pipeLabel(c) + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : "") + "<br><br>" + retrieverTip(c.retriever));
       tr.appendChild(th);
       METRICS.forEach(m => {
         const s = (stats[m.key] || {})[id];
@@ -490,7 +730,7 @@
           const net = s.wins - s.losses;
           if (S.metricHeat) td.style.cssText = heatStyle(net, -3, 3, true);
         } else {
-          td.textContent = num(s.mean, m.fmt);
+          td.textContent = mnum(s.mean, m);
           if (S.metricHeat && ranges[m.key]) td.style.cssText = heatStyle(s.mean, ranges[m.key].min, ranges[m.key].max, m.higher);
         }
         tr.appendChild(td);
@@ -509,7 +749,7 @@
     const left = el("div", { class: "guide-col" });
     left.appendChild(el("h3", { text: "Metrics glossary" }));
     const gt = el("table", { class: "gloss" });
-    const order = ["MRR", "H@1", "H@5", "nDCG", "P50", "P95", "build", "gen", "gen ms", "tok/s", "gen $", "$/q", "par", "shift", "n", "Pareto", "DQ", "verdict"];
+    const order = ["MRR", "H@1", "H@5", "nDCG", "P50", "P95", "build", "gen", "gen ms", "tok/s", "gen $", "$/kq", "par", "shift", "n", "Pareto", "DQ", "verdict"];
     order.forEach(k => { if (GLOSS[k]) gt.appendChild(el("tr", null, [el("td", { class: "term", text: k }), el("td", { class: "def", text: GLOSS[k] })])); });
     left.appendChild(gt); host.appendChild(left);
     // right: profiles + provenance

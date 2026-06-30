@@ -281,6 +281,9 @@
         { key: "reranker", head: "rerank", thClass: "sortable",
           tip: glossTip("rerank"),
           render: r => rerankerCell(r) },
+        { key: null, head: "DQ", thClass: "dq-col",
+          tip: glossTip("DQ"),
+          render: r => dqCell(flagFor(r).dq) },
       ];
     } else {
       rows = (aggByCand[S.cand] || []).slice();
@@ -288,6 +291,9 @@
         { key: "pipe", head: "benchmark", thClass: "txt lbl sortable",
           tip: "<b>benchmark</b><br>The evaluation dataset for this row.",
           render: r => bindTip(el("td", { class: "txt" }, el("span", { class: "pipe", text: benchShort(r.benchmark) })), "<b>" + r.benchmark + "</b>") },
+        { key: null, head: "DQ", thClass: "dq-col",
+          tip: glossTip("DQ"),
+          render: r => dqCell((D.bench_tables[r.benchmark] || { dq: {} }).dq[r.candidate_id]) },
       ];
     }
 
@@ -368,13 +374,27 @@
     td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelDisplay(c) })));
     if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-left:7px" }));
     if (flag.pareto) td.appendChild(el("span", { class: "star", text: "★", style: "margin-left:6px" }));
-    if (flag.dq) td.appendChild(el("span", { class: "badge dq", text: "DQ:" + flag.dq, style: "margin-left:7px" }));
     const head = c.is_retrieval_only
       ? "<b>no model</b><br>Retrieval-only pipeline \u2014 the \u201cretrieval-only\u201d candidate runs no LLM generation step."
       : "<b>" + c.model + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : "");
     return bindTip(td, head +
-      (flag.pareto ? "<br><br>\u2605 On the Pareto front (not dominated on accuracy / latency / build-cost)." : "") +
-      (flag.dq ? "<br><br>Disqualified by a profile's <b>" + flag.dq + "</b> gate." : ""));
+      (flag.pareto ? "<br><br>\u2605 On the Pareto front (not dominated on accuracy / latency / build-cost)." : ""));
+  }
+
+  const DQ_REASON = {
+    latency: "p50 / average latency over a profile's budget.",
+    cost: "cost per query over a profile's ceiling.",
+    accuracy: "MRR or generation score below a profile's floor.",
+  };
+  function dqCell(reason) {
+    const td = el("td", { class: "dq-col" });
+    if (reason) {
+      td.appendChild(el("span", { class: "badge dq", text: reason }));
+      return bindTip(td, "<b>DQ \u2014 " + reason + "</b><br>" + (DQ_REASON[reason] || "") +
+        "<br><br>Reason shown is from the first profile that disqualified this pipeline; other profiles may flag a different gate.");
+    }
+    td.appendChild(el("span", { class: "dq-ok", text: "\u2014" }));
+    return bindTip(td, "Passes every profile's hard gates (not disqualified).");
   }
 
   function retrieverCell(r) {
@@ -490,6 +510,7 @@
     const table = el("table");
     const thead = el("thead"); const htr = el("tr");
     htr.appendChild(el("th", { class: "txt", text: "benchmark", style: "text-align:left;position:sticky;top:0;background:var(--bg-elev)" }));
+    htr.appendChild(bindTip(el("th", { class: "dq-col", html: "DQ", style: "position:sticky;top:0;background:var(--bg-elev)" }), glossTip("DQ")));
     cols.forEach(m => htr.appendChild(bindTip(el("th", { html: m.label, style: "position:sticky;top:0;background:var(--bg-elev)" }), glossTip(m.tip, m.higher ? "Higher is better." : "Lower is better."))));
     thead.appendChild(htr); table.appendChild(thead);
     const ranges = {}; cols.forEach(m => { const vs = rows.map(r => r[m.field]).filter(v => v != null); ranges[m.field] = vs.length ? { min: Math.min(...vs), max: Math.max(...vs) } : null; });
@@ -498,9 +519,9 @@
       const bt = D.bench_tables[r.benchmark];
       const tr = el("tr");
       const star = bt && bt.pareto.includes(id) ? el("span", { class: "star", text: "★ " }) : null;
-      const dq = bt && bt.dq[id] ? el("span", { class: "badge dq", text: "DQ:" + bt.dq[id], style: "margin-left:6px" }) : null;
-      const tdL = el("td", { class: "txt" }); if (star) tdL.appendChild(star); tdL.appendChild(el("span", { text: benchShort(r.benchmark) })); if (dq) tdL.appendChild(dq);
+      const tdL = el("td", { class: "txt" }); if (star) tdL.appendChild(star); tdL.appendChild(el("span", { text: benchShort(r.benchmark) }));
       tr.appendChild(tdL);
+      tr.appendChild(dqCell(bt && bt.dq[id]));
       cols.forEach(m => { const v = r[m.field]; const td = el("td", { text: num(v, m.fmt) }); if (ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher); tr.appendChild(td); });
       tb.appendChild(tr);
     });

@@ -565,7 +565,7 @@
           const subParts = [];
           const mrrS = num(cell.mrr, "f3"); if (mrrS !== "") subParts.push("MRR " + mrrS);
           const mvS = num(cell.metric_val, "f2"); if (mvS !== "") subParts.push(mvLabel + " " + mvS);
-          const p50S = num(cell.p50, "f0"); if (p50S !== "") subParts.push("p50 " + p50S + "ms");
+          const p50S = num(cell.p50, "g0"); if (p50S !== "") subParts.push("p50 " + p50S + "ms");
           wrap.appendChild(bindTip(el("span", { class: "verdict " + (VCLASS[cell.verdict] || "v-none"), text: cell.verdict }),
             glossTip("verdict") ));
           wrap.appendChild(el("span", { class: "cell-sub", text: subParts.join(" · ") }));
@@ -614,7 +614,7 @@
     const stat = (n, l, tipTerm) => { const s = el("div", { class: "stat" }, [el("div", { class: "n", text: n }), bindTip(el("div", { class: "l", text: l }), glossTip(tipTerm))]); stats.appendChild(s); };
     stat(num(mean("mrr"), "f3"), "mean MRR", "MRR");
     const gm = mean("generation_acc"); stat(gm == null ? "—" : num(gm, "f2"), "mean gen", "gen");
-    stat(num(mean("p50_retrieval_latency_ms"), "f0"), "p50 ms", "P50");
+    stat(num(mean("p50_retrieval_latency_ms"), "g0"), "p50 ms", "P50");
     stat(String(paretoCount), "Pareto ★", "Pareto");
     stat(String(dqCount), "DQ count", "DQ");
     left.appendChild(stats);

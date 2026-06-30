@@ -301,7 +301,7 @@ GLOSSARY = {
     "gen ms": "Median per-query generation latency (time-to-first-token + generation) in milliseconds. Lower is better.",
     "tok/s": "LLM output tokens generated per second on this benchmark. Higher is better.",
     "gen $": "Estimated generation cost per query in USD (token usage \u00d7 model price). Lower is better.",
-    "$/q": "Total estimated cost per query in USD (retrieval + generation). Lower is better.",
+    "$/kq": "Total estimated cost per 1,000 queries in USD (retrieval + generation). Lower is better.",
     "par": "Paraphrase robustness \u2014 MRR on paraphrased queries minus MRR on originals. Near zero is expected; large negative means fragile exact-match retrieval.",
     "shift": "Held-out (domain-shifted) slice MRR \u2014 measures out-of-distribution generalization on an unseen query subset.",
     "n": "Number of queries evaluated for this row.",
@@ -313,22 +313,24 @@ GLOSSARY = {
 }
 
 # Per-metric definitions used by the Compare and Metrics tabs.
-# key -> (label, field, higher_is_better, fmt, tooltip-key)
+# key -> (label, field, higher_is_better, fmt, tooltip-key, display_scale)
+# display_scale multiplies the stored value for presentation only (the raw
+# field is left untouched so hard-constraint gates keep using true values).
 METRICS = [
-    ("mrr", "MRR", "mrr", True, "f3", "MRR"),
-    ("h1", "H@1", "hit_at_1", True, "f2", "H@1"),
-    ("h5", "H@5", "hit_at_5", True, "f2", "H@5"),
-    ("ndcg", "nDCG", "ndcg_at_10", True, "f3", "nDCG"),
-    ("p50", "P50 ms", "p50_retrieval_latency_ms", False, "f0", "P50"),
-    ("p95", "P95 ms", "p95_retrieval_latency_ms", False, "f0", "P95"),
-    ("build", "Build s", "index_build_seconds", False, "f1", "build"),
-    ("gen", "gen", "generation_acc", True, "f3", "gen"),
-    ("gen_ms", "gen ms", "p50_generation_latency_ms", False, "f0", "gen ms"),
-    ("tok_s", "tok/s", "generation_tokens_per_sec", True, "f0", "tok/s"),
-    ("gen_cost", "gen $", "est_generation_cost_per_query_usd", False, "f5", "gen $"),
-    ("cost", "$/q", "est_cost_per_query_usd", False, "f5", "$/q"),
-    ("par", "par", "paraphrase_drop", True, "f3", "par"),
-    ("shift", "shift", "shift_drop", True, "f3", "shift"),
+    ("mrr", "MRR", "mrr", True, "f3", "MRR", 1),
+    ("h1", "H@1", "hit_at_1", True, "f2", "H@1", 1),
+    ("h5", "H@5", "hit_at_5", True, "f2", "H@5", 1),
+    ("ndcg", "nDCG", "ndcg_at_10", True, "f3", "nDCG", 1),
+    ("p50", "P50 ms", "p50_retrieval_latency_ms", False, "f0", "P50", 1),
+    ("p95", "P95 ms", "p95_retrieval_latency_ms", False, "f0", "P95", 1),
+    ("build", "Build s", "index_build_seconds", False, "f1", "build", 1),
+    ("gen", "gen", "generation_acc", True, "f3", "gen", 1),
+    ("gen_ms", "gen ms", "p50_generation_latency_ms", False, "f0", "gen ms", 1),
+    ("tok_s", "tok/s", "generation_tokens_per_sec", True, "f0", "tok/s", 1),
+    ("gen_cost", "gen $", "est_generation_cost_per_query_usd", False, "f5", "gen $", 1),
+    ("cost", "$/kq", "est_cost_per_query_usd", False, "f2", "$/kq", 1000),
+    ("par", "par", "paraphrase_drop", True, "f3", "par", 1),
+    ("shift", "shift", "shift_drop", True, "f3", "shift", 1),
 ]
 
 
@@ -448,7 +450,7 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
     # ----- Per-metric win / loss tally across benchmarks -----
     EPS = 1e-9
     metric_stats: Dict[str, dict] = {}
-    for key, label, fieldname, higher, _fmt, _tip in METRICS:
+    for key, label, fieldname, higher, _fmt, _tip, _scale in METRICS:
         per_cand: Dict[str, dict] = {}
         for bench in benchmarks:
             vals = [
@@ -515,8 +517,8 @@ def build(run_json: Path, profiles_dir: Path) -> dict:
         "bench_tables": bench_tables,
         "metric_stats": metric_stats,
         "metrics_def": [
-            {"key": k, "label": l, "field": f, "higher": h, "fmt": fmt, "tip": t}
-            for (k, l, f, h, fmt, t) in METRICS
+            {"key": k, "label": l, "field": f, "higher": h, "fmt": fmt, "tip": t, "scale": sc}
+            for (k, l, f, h, fmt, t, sc) in METRICS
         ],
         "glossary": GLOSSARY,
         "provenance": header,

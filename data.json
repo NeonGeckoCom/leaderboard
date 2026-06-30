@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-30T00:48:01.863256+00:00",
+  "generated_at": "2026-06-30T01:14:40.475200+00:00",
   "date": "2026-06-29",
   "benchmarks": [
     "dataset-neonai-qa",
@@ -5400,7 +5400,8 @@
       "field": "mrr",
       "higher": true,
       "fmt": "f3",
-      "tip": "MRR"
+      "tip": "MRR",
+      "scale": 1
     },
     {
       "key": "h1",
@@ -5408,7 +5409,8 @@
       "field": "hit_at_1",
       "higher": true,
       "fmt": "f2",
-      "tip": "H@1"
+      "tip": "H@1",
+      "scale": 1
     },
     {
       "key": "h5",
@@ -5416,7 +5418,8 @@
       "field": "hit_at_5",
       "higher": true,
       "fmt": "f2",
-      "tip": "H@5"
+      "tip": "H@5",
+      "scale": 1
     },
     {
       "key": "ndcg",
@@ -5424,7 +5427,8 @@
       "field": "ndcg_at_10",
       "higher": true,
       "fmt": "f3",
-      "tip": "nDCG"
+      "tip": "nDCG",
+      "scale": 1
     },
     {
       "key": "p50",
@@ -5432,7 +5436,8 @@
       "field": "p50_retrieval_latency_ms",
       "higher": false,
       "fmt": "f0",
-      "tip": "P50"
+      "tip": "P50",
+      "scale": 1
     },
     {
       "key": "p95",
@@ -5440,7 +5445,8 @@
       "field": "p95_retrieval_latency_ms",
       "higher": false,
       "fmt": "f0",
-      "tip": "P95"
+      "tip": "P95",
+      "scale": 1
     },
     {
       "key": "build",
@@ -5448,7 +5454,8 @@
       "field": "index_build_seconds",
       "higher": false,
       "fmt": "f1",
-      "tip": "build"
+      "tip": "build",
+      "scale": 1
     },
     {
       "key": "gen",
@@ -5456,7 +5463,8 @@
       "field": "generation_acc",
       "higher": true,
       "fmt": "f3",
-      "tip": "gen"
+      "tip": "gen",
+      "scale": 1
     },
     {
       "key": "gen_ms",
@@ -5464,7 +5472,8 @@
       "field": "p50_generation_latency_ms",
       "higher": false,
       "fmt": "f0",
-      "tip": "gen ms"
+      "tip": "gen ms",
+      "scale": 1
     },
     {
       "key": "tok_s",
@@ -5472,7 +5481,8 @@
       "field": "generation_tokens_per_sec",
       "higher": true,
       "fmt": "f0",
-      "tip": "tok/s"
+      "tip": "tok/s",
+      "scale": 1
     },
     {
       "key": "gen_cost",
@@ -5480,15 +5490,17 @@
       "field": "est_generation_cost_per_query_usd",
       "higher": false,
       "fmt": "f5",
-      "tip": "gen $"
+      "tip": "gen $",
+      "scale": 1
     },
     {
       "key": "cost",
-      "label": "$/q",
+      "label": "$/kq",
       "field": "est_cost_per_query_usd",
       "higher": false,
-      "fmt": "f5",
-      "tip": "$/q"
+      "fmt": "f2",
+      "tip": "$/kq",
+      "scale": 1000
     },
     {
       "key": "par",
@@ -5496,7 +5508,8 @@
       "field": "paraphrase_drop",
       "higher": true,
       "fmt": "f3",
-      "tip": "par"
+      "tip": "par",
+      "scale": 1
     },
     {
       "key": "shift",
@@ -5504,7 +5517,8 @@
       "field": "shift_drop",
       "higher": true,
       "fmt": "f3",
-      "tip": "shift"
+      "tip": "shift",
+      "scale": 1
     }
   ],
   "glossary": {
@@ -5522,7 +5536,7 @@
     "gen ms": "Median per-query generation latency (time-to-first-token + generation) in milliseconds. Lower is better.",
     "tok/s": "LLM output tokens generated per second on this benchmark. Higher is better.",
     "gen $": "Estimated generation cost per query in USD (token usage × model price). Lower is better.",
-    "$/q": "Total estimated cost per query in USD (retrieval + generation). Lower is better.",
+    "$/kq": "Total estimated cost per 1,000 queries in USD (retrieval + generation). Lower is better.",
     "par": "Paraphrase robustness — MRR on paraphrased queries minus MRR on originals. Near zero is expected; large negative means fragile exact-match retrieval.",
     "shift": "Held-out (domain-shifted) slice MRR — measures out-of-distribution generalization on an unseen query subset.",
     "n": "Number of queries evaluated for this row.",

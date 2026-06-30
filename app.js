@@ -67,6 +67,10 @@
     const d = { f0: 0, f1: 1, f2: 2, f3: 3, f5: 5 }[code];
     return Number(v).toFixed(d == null ? 3 : d);
   }
+  // Format a metric value, applying its display scale (e.g. $/kq = per-query × 1000).
+  function mnum(v, m) {
+    return (v == null || v === "") ? "" : num(v * (m.scale || 1), m.fmt);
+  }
   function modelName(c) { return c.is_retrieval_only ? "no model" : c.model; }
   function pipeLabel(c) {
     const r = c.reranker && c.reranker !== "none" ? " · " + c.reranker : "";
@@ -344,7 +348,7 @@
       tip: glossTip(m.tip, m.higher ? "Higher is better." : "Lower is better."),
       render: r => {
         const v = r[m.field];
-        const td = el("td", { text: num(v, m.fmt) });
+        const td = el("td", { text: mnum(v, m) });
         if (S.heat && ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher);
         return td;
       },
@@ -589,7 +593,7 @@
       const tdL = el("td", { class: "txt" }); if (star) tdL.appendChild(star); tdL.appendChild(el("span", { text: benchShort(r.benchmark) }));
       tr.appendChild(tdL);
       tr.appendChild(dqCell(bt && bt.dq[id]));
-      cols.forEach(m => { const v = r[m.field]; const td = el("td", { text: num(v, m.fmt) }); if (ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher); tr.appendChild(td); });
+      cols.forEach(m => { const v = r[m.field]; const td = el("td", { text: mnum(v, m) }); if (ranges[m.field]) td.style.cssText = heatStyle(v, ranges[m.field].min, ranges[m.field].max, m.higher); tr.appendChild(td); });
       tb.appendChild(tr);
     });
     table.appendChild(tb); right.appendChild(table); host.appendChild(right);
@@ -661,7 +665,7 @@
           const net = s.wins - s.losses;
           if (S.metricHeat) td.style.cssText = heatStyle(net, -3, 3, true);
         } else {
-          td.textContent = num(s.mean, m.fmt);
+          td.textContent = mnum(s.mean, m);
           if (S.metricHeat && ranges[m.key]) td.style.cssText = heatStyle(s.mean, ranges[m.key].min, ranges[m.key].max, m.higher);
         }
         tr.appendChild(td);
@@ -680,7 +684,7 @@
     const left = el("div", { class: "guide-col" });
     left.appendChild(el("h3", { text: "Metrics glossary" }));
     const gt = el("table", { class: "gloss" });
-    const order = ["MRR", "H@1", "H@5", "nDCG", "P50", "P95", "build", "gen", "gen ms", "tok/s", "gen $", "$/q", "par", "shift", "n", "Pareto", "DQ", "verdict"];
+    const order = ["MRR", "H@1", "H@5", "nDCG", "P50", "P95", "build", "gen", "gen ms", "tok/s", "gen $", "$/kq", "par", "shift", "n", "Pareto", "DQ", "verdict"];
     order.forEach(k => { if (GLOSS[k]) gt.appendChild(el("tr", null, [el("td", { class: "term", text: k }), el("td", { class: "def", text: GLOSS[k] })])); });
     left.appendChild(gt); host.appendChild(left);
     // right: profiles + provenance

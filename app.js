@@ -520,10 +520,14 @@
           retrieverBadgeEls(cell.retriever).forEach(b => pl.appendChild(b));
           if (c && c.reranker && c.reranker !== "none") pl.appendChild(el("span", { class: "cell-sub", text: "· " + c.reranker }));
           wrap.appendChild(bindTip(pl, retrieverTip(cell.retriever) + (c && c.reranker !== "none" ? "<br><br>" + rerankerTip(c) : "")));
-          const mv = cell.metric === "generation_acc" ? "gen " + num(cell.metric_val, "f2") : "H@1 " + num(cell.metric_val, "f2");
+          const mvLabel = cell.metric === "generation_acc" ? "gen" : "H@1";
+          const subParts = [];
+          const mrrS = num(cell.mrr, "f3"); if (mrrS !== "") subParts.push("MRR " + mrrS);
+          const mvS = num(cell.metric_val, "f2"); if (mvS !== "") subParts.push(mvLabel + " " + mvS);
+          const p50S = num(cell.p50, "f0"); if (p50S !== "") subParts.push("p50 " + p50S + "ms");
           wrap.appendChild(bindTip(el("span", { class: "verdict " + (VCLASS[cell.verdict] || "v-none"), text: cell.verdict }),
             glossTip("verdict") ));
-          wrap.appendChild(el("span", { class: "cell-sub", text: "MRR " + num(cell.mrr, "f3") + " · " + mv + " · p50 " + num(cell.p50, "f0") + "ms" }));
+          wrap.appendChild(el("span", { class: "cell-sub", text: subParts.join(" · ") }));
           td.appendChild(wrap);
         } else {
           td.appendChild(el("span", { class: "verdict " + (VCLASS[(cell && cell.verdict)] || "v-dq"), text: (cell && cell.verdict) || "—" }));

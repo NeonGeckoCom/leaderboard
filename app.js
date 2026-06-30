@@ -119,19 +119,27 @@
   }
 
   // ---- color heat (sequential blue -> green, darker = better) ----
-  function heatStyle(v, min, max, higher) {
-    if (v == null || v === "" || max === min) return "";
-    let t = (v - min) / (max - min);            // 0..1, 1 = numerically max
-    if (!higher) t = 1 - t;                       // 1 = better
-    // Smooth blue (worst) -> green (best) ramp that DARKENS as values improve.
-    // A monotonic luminance ramp is legible for every type of colour blindness
-    // and prints clearly; the blue->green hue shift is a secondary cue. Dark
-    // mode keeps a higher saturation floor so colours stay vivid on the dark UI.
+  // Shared ramp: t in 0..1, 1 = best. Smooth blue (worst) -> green (best) that
+  // DARKENS as values improve. A monotonic luminance ramp is legible for every
+  // type of colour blindness and prints clearly; the blue->green hue shift is a
+  // secondary cue. Dark mode keeps a higher saturation floor so colours stay
+  // vivid on the dark UI. Returns just the hsl() colour.
+  function heatColor(t) {
     const dark = document.documentElement.getAttribute("data-theme") !== "light";
     const hue = 216 + (150 - 216) * t;            // 216 blue -> 150 green
     const sat = dark ? 52 + 20 * t : 36 + 26 * t; // dark: 52->72%, light: 36->62%
     const lgt = dark ? 44 - 24 * t : 93 - 28 * t; // dark: 44->20%, light: 93->65%
-    return "background:hsl(" + hue.toFixed(0) + "," + sat.toFixed(0) + "%," + lgt.toFixed(1) + "%)";
+    return "hsl(" + hue.toFixed(0) + "," + sat.toFixed(0) + "%," + lgt.toFixed(1) + "%)";
+  }
+  // Legible text colour to pair with a heat background in the current theme.
+  function heatInk() {
+    return document.documentElement.getAttribute("data-theme") !== "light" ? "#eef4f8" : "#15181d";
+  }
+  function heatStyle(v, min, max, higher) {
+    if (v == null || v === "" || max === min) return "";
+    let t = (v - min) / (max - min);            // 0..1, 1 = numerically max
+    if (!higher) t = 1 - t;                       // 1 = better
+    return "background:" + heatColor(t);
   }
 
   // ---- searchable combobox (single select) ----
@@ -225,6 +233,8 @@
   function paintLegendSwatches() {
     $("#lgGood").style.cssText = "width:11px;height:11px;border-radius:3px;display:inline-block;" + heatStyle(1, 0, 1, true);
     $("#lgBad").style.cssText = "width:11px;height:11px;border-radius:3px;display:inline-block;" + heatStyle(0, 0, 1, true);
+    const lgDQ = $("#lgDQ");
+    if (lgDQ) lgDQ.style.cssText = "padding:0 6px;background:" + heatColor(0) + ";color:" + heatInk() + ";border:1px solid rgba(128,128,128,.25)";
   }
 
   // ===================================================================
@@ -462,14 +472,25 @@
     cost: "cost per query over a profile's ceiling.",
     accuracy: "MRR or generation score below a profile's floor.",
   };
+  // Severity mapped onto the shared heat ramp: accuracy is the most important
+  // gate (worst failure -> blue, t=0), cost is middle, latency is least
+  // important (second-best -> t=0.75). The best colour (t=1, green) is reserved
+  // for pipelines that pass every gate.
+  const DQ_T = { accuracy: 0, cost: 0.5, latency: 0.75 };
+  function dqBadge(text, t) {
+    return el("span", {
+      class: "badge dq-heat", text: text,
+      style: "background:" + heatColor(t) + ";color:" + heatInk() + ";border:1px solid rgba(128,128,128,.25)",
+    });
+  }
   function dqCell(reason) {
     const td = el("td", { class: "dq-col" });
     if (reason) {
-      td.appendChild(el("span", { class: "badge dq", text: reason }));
+      td.appendChild(dqBadge(reason, DQ_T[reason] != null ? DQ_T[reason] : 0));
       return bindTip(td, "<b>DQ \u2014 " + reason + "</b><br>" + (DQ_REASON[reason] || "") +
         "<br><br>Reason shown is from the first profile that disqualified this pipeline; other profiles may flag a different gate.");
     }
-    td.appendChild(el("span", { class: "dq-ok", text: "\u2014" }));
+    td.appendChild(dqBadge("\u2713", 1));
     return bindTip(td, "Passes every profile's hard gates (not disqualified).");
   }
 

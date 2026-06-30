@@ -67,9 +67,10 @@
     const d = { f0: 0, f1: 1, f2: 2, f3: 3, f5: 5 }[code];
     return Number(v).toFixed(d == null ? 3 : d);
   }
+  function modelName(c) { return c.is_retrieval_only ? "no model" : c.model; }
   function pipeLabel(c) {
     const r = c.reranker && c.reranker !== "none" ? " · " + c.reranker : "";
-    return c.model + " · " + c.retriever + r;
+    return modelName(c) + " · " + c.retriever + r;
   }
   function benchShort(b) { return b.replace(/^dataset-/, "").replace(/-qa$/, ""); }
 
@@ -256,8 +257,6 @@
   function activeMetricCols(rows) {
     return METRICS.filter(m => rows.some(r => r[m.field] != null && r[m.field] !== ""));
   }
-  function modelDisplay(c) { return c.is_retrieval_only ? "no model" : c.model; }
-
   function renderCompare() {
     const table = $("#cmpTable");
     table.innerHTML = "";
@@ -304,7 +303,7 @@
       if (k === "pipe") {
         if (S.cmpMode !== "byBench") return r.benchmark;
         const c = CANDS[r.candidate_id];
-        return modelDisplay(c) + "|" + c.retriever + "|" + c.reranker;
+        return modelName(c) + "|" + c.retriever + "|" + c.reranker;
       }
       if (k === "reranker") return r.reranker || "";
       return null;
@@ -371,7 +370,7 @@
   function modelCell(r, flag) {
     const c = CANDS[r.candidate_id];
     const td = el("td", { class: "txt" });
-    td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelDisplay(c) })));
+    td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelName(c) })));
     if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-left:7px" }));
     if (flag.pareto) td.appendChild(el("span", { class: "star", text: "★", style: "margin-left:6px" }));
     const head = c.is_retrieval_only
@@ -397,27 +396,35 @@
     return bindTip(td, "Passes every profile's hard gates (not disqualified).");
   }
 
+  // Build the retriever component badges (reused across Compare/Picks/Models/Metrics).
+  function retrieverBadgeEls(name) {
+    const meta = (D.retrievers || {})[name];
+    if (!meta || !meta.components.length) return [el("span", { class: "pipe", text: name })];
+    return meta.components.map(cp => {
+      const b = el("span", { class: "rbadge " + cp.key, text: cp.label });
+      if (cp.detail) b.appendChild(el("small", { text: cp.detail }));
+      return b;
+    });
+  }
+  function retrieverTip(name) {
+    const meta = (D.retrievers || {})[name];
+    return "<b>" + name + "</b>" + (meta ? "<br>" + meta.summary : "");
+  }
+  function rerankerTip(c) {
+    return "<b>" + c.reranker + "</b>" +
+      (c.reranker_model ? "<br>" + c.reranker_model : (c.reranker === "none" ? "<br>No reranking applied." : ""));
+  }
+
   function retrieverCell(r) {
-    const meta = (D.retrievers || {})[r.retriever];
     const td = el("td", { class: "txt" });
-    if (!meta || !meta.components.length) {
-      td.appendChild(el("span", { class: "pipe", text: r.retriever }));
-    } else {
-      meta.components.forEach(cp => {
-        const b = el("span", { class: "rbadge " + cp.key, text: cp.label });
-        if (cp.detail) b.appendChild(el("small", { text: cp.detail }));
-        td.appendChild(b);
-      });
-    }
-    return bindTip(td, "<b>" + r.retriever + "</b>" + (meta ? "<br>" + meta.summary : ""));
+    retrieverBadgeEls(r.retriever).forEach(b => td.appendChild(b));
+    return bindTip(td, retrieverTip(r.retriever));
   }
 
   function rerankerCell(r) {
     const c = CANDS[r.candidate_id];
     const td = el("td", { class: "rerank-col", text: r.reranker });
-    const model = c.reranker_model;
-    return bindTip(td, "<b>" + r.reranker + "</b>" +
-      (model ? "<br>" + model : (r.reranker === "none" ? "<br>No reranking applied." : "")));
+    return bindTip(td, rerankerTip(c));
   }
 
   // ===================================================================
@@ -448,10 +455,14 @@
         if (cell && cell.pick) {
           const c = CANDS[cell.pick];
           const wrap = el("div");
-          const line = el("div", { style: "font-family:var(--mono);font-size:11.5px;margin-bottom:4px" });
-          if (c && c.is_neon) line.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:5px" }));
-          line.appendChild(el("span", { text: cell.model + " · " + cell.retriever }));
+          const line = el("div", { style: "display:flex;align-items:center;gap:5px;margin-bottom:4px" });
+          line.appendChild(el("span", { text: c ? modelName(c) : cell.model, style: "font-family:var(--mono);font-size:11.5px" }));
+          if (c && c.is_neon) line.appendChild(el("span", { class: "badge neon", text: "NEON" }));
           wrap.appendChild(line);
+          const pl = el("div", { style: "display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-bottom:4px" });
+          retrieverBadgeEls(cell.retriever).forEach(b => pl.appendChild(b));
+          if (c && c.reranker && c.reranker !== "none") pl.appendChild(el("span", { class: "cell-sub", text: "· " + c.reranker }));
+          wrap.appendChild(bindTip(pl, retrieverTip(cell.retriever) + (c && c.reranker !== "none" ? "<br><br>" + rerankerTip(c) : "")));
           const mv = cell.metric === "generation_acc" ? "gen " + num(cell.metric_val, "f2") : "H@1 " + num(cell.metric_val, "f2");
           wrap.appendChild(bindTip(el("span", { class: "verdict " + (VCLASS[cell.verdict] || "v-none"), text: cell.verdict }),
             glossTip("verdict") ));
@@ -485,9 +496,12 @@
 
     // left card
     const left = el("div", { class: "card" });
-    left.appendChild(el("h3", { style: "margin:0 0 10px;font-size:14px", text: c.model }));
+    left.appendChild(el("h3", { style: "margin:0 0 10px;font-size:14px", text: modelName(c) }));
+    const retV = el("span", { class: "v", style: "display:flex;flex-wrap:wrap;justify-content:flex-end;gap:3px" });
+    retrieverBadgeEls(c.retriever).forEach(b => retV.appendChild(b));
+    left.appendChild(bindTip(el("div", { class: "kv" }, [el("span", { class: "k", text: "retriever" }), retV]), retrieverTip(c.retriever)));
     const kvs = [
-      ["pipeline", c.retriever + (c.reranker !== "none" ? " · " + c.reranker : "")],
+      ["reranker", c.reranker],
       ["model repo", c.model_repo || "—"],
       ["serving", c.model_adapter || "—"],
       ["benchmarks", String(rows.length)],
@@ -534,7 +548,7 @@
   const metricSortSel = $("#metricSortSel");
   function fillMetricSort() {
     metricSortSel.innerHTML = "";
-    metricSortSel.appendChild(el("option", { value: "name", text: "Pipeline (A–Z)" }));
+    metricSortSel.appendChild(el("option", { value: "name", text: "Model (A–Z)" }));
     METRICS.forEach(m => metricSortSel.appendChild(el("option", { value: m.key, text: m.label })));
     metricSortSel.value = S.metricSort;
   }
@@ -576,10 +590,14 @@
     ids.forEach(id => {
       const c = CANDS[id];
       const tr = el("tr", { class: c.is_neon ? "neon" : "" });
-      const th = el("th", { style: "font-family:var(--mono);font-size:11.5px" });
-      if (c.is_neon) th.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-right:5px" }));
-      th.appendChild(el("span", { text: pipeLabel(c) }));
-      bindTip(th, "<b>" + pipeLabel(c) + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : ""));
+      const th = el("th", { style: "font-size:11.5px" });
+      const idLine = el("div", { style: "display:flex;align-items:center;gap:5px;white-space:nowrap" });
+      idLine.appendChild(el("span", { text: modelName(c), style: "font-family:var(--mono)" }));
+      if (c.is_neon) idLine.appendChild(el("span", { class: "badge neon", text: "NEON" }));
+      retrieverBadgeEls(c.retriever).forEach(b => idLine.appendChild(b));
+      if (c.reranker !== "none") idLine.appendChild(el("span", { class: "cell-sub", text: c.reranker }));
+      th.appendChild(idLine);
+      bindTip(th, "<b>" + pipeLabel(c) + "</b>" + (c.model_repo ? "<br>repo: " + c.model_repo : "") + "<br><br>" + retrieverTip(c.retriever));
       tr.appendChild(th);
       METRICS.forEach(m => {
         const s = (stats[m.key] || {})[id];

@@ -425,7 +425,6 @@
     const c = CANDS[r.candidate_id];
     const td = el("td", { class: "txt" });
     td.appendChild(el("span", { class: "pipe" }, el("b", { text: modelName(c) })));
-    if (c.is_neon) td.appendChild(el("span", { class: "badge neon", text: "NEON", style: "margin-left:7px" }));
     if (flag.pareto) td.appendChild(el("span", { class: "star", text: "★", style: "margin-left:6px" }));
     const head = c.is_retrieval_only
       ? "<b>no model</b><br>Retrieval-only pipeline \u2014 the \u201cretrieval-only\u201d candidate runs no LLM generation step."
